@@ -291,5 +291,7 @@ def saves_auto_open():
     return ("", 204)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "7860"))
-    app.run(host="127.0.0.1", port=port, debug=True, threaded=True)
+    import os
+    port = int(os.environ.get("PORT", "7860"))  # ← Render が渡すPORTを尊重
+    # 0.0.0.0 で待ち受け（127.0.0.1固定はNG）
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
