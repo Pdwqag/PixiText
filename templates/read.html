@@ -1,0 +1,23 @@
+
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>単ページビュー</h2>
+  <div class="rendered">
+    <div class="document {{ writing_mode }}">
+      <section class="page single" id="page-{{p}}" data-index="{{p}}">
+        <div class="page-inner">{{ page.html|safe }}</div>
+      </section>
+    </div>
+  </div>
+  <div class="bottom-pager">
+    <div class="pager-center">
+      <a class="page-arrow prev" href="{{ url_for('read_single', p=max(1, p-1)) }}">&lsaquo;</a>
+      {% for i in nums %}
+        <a class="page-number {% if i==p %}active{% endif %}" href="{{ url_for('read_single', p=i) }}">{{ i }}</a>
+      {% endfor %}
+      <a class="page-arrow next" href="{{ url_for('read_single', p=min(total, p+1)) }}">&rsaquo;</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

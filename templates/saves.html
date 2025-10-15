@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>保存済みテキスト一覧</h2>
+
+  <p style="margin-bottom:12px;">
+    <a class="back-button" href="{{ url_for('index') }}"><span class="icon">エディタに戻る</span></a>
+  </p>
+
+  {% if files %}
+    <div class="mg-grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+      {% for f in files %}
+        <div class="mg-card">
+          <div class="mg-body">
+            <!-- ファイル名 -->
+            <div class="mg-id" title="{{ f.name }}">{{ f.name }}</div>
+            <!-- メタ情報 -->
+            <div class="mg-name">{{ f.size_kb }} KB ・ {{ f.mtime_str }}</div>
+
+            <div class="mg-actions">
+              <!-- 編集（＝開く → セッションへ読込 → indexへ） -->
+              <form method="get" action="{{ url_for('saves_open') }}">
+                <input type="hidden" name="fname" value="{{ f.name }}">
+                <button class="mg-btn" type="submit">編集</button>
+              </form>
+
+              <!-- 削除（モーダル確認） -->
+              <form method="post"
+                    action="{{ url_for('saves_delete') }}"
+                    class="js-delete" data-what="テキスト" data-id="{{ f.name }}">
+                <input type="hidden" name="fname" value="{{ f.name }}">
+                <button class="mg-btn delete" type="submit">削除</button>
+              </form>
+
+              <!-- コピー（ファイル名をコピーしたい場合のおまけ。要らなければ削除OK） -->
+              <button class="mg-btn copy" type="button" data-copy="{{ f.name }}">コピー</button>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p style="opacity:.8;">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
+  {% endif %}
+</section>
+{% endblock %}

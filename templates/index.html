@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- ===== エディタ ===== -->
+<section class="panel">
+  <h2>本文エディタ</h2>
+
+  <!-- プレビュー/保存 兼用フォーム（保存は formaction で切替） -->
+  <form method="post" action="{{ url_for('preview') }}" novalidate>
+    <label for="text">タグのショートカット</label>
+
+    <div class="shortcut-bar">
+      <button type="button" class="ins" data-insert="[newpage]">[newpage]</button>
+      <button type="button" class="ins" data-insert="[chapter:章タイトル]">[chapter]</button>
+      <button type="button" class="ins" data-insert="[uploadedimage:12345]">[uploadedimage]</button>
+      <button type="button" class="ins" data-insert="[pixivimage:123456789]">[pixivimage]</button>
+      <button type="button" class="ins" data-insert="[jump:2]">[jump]</button>
+      <button type="button" class="ins" data-insert="[[jumpuri:タイトル > https://example.com]]">[[jumpuri]]</button>
+      <button type="button" class="ins" data-insert="[[rb:漢字 > かんじ]]">[[rb]]</button>
+    </div>
+
+    <textarea id="text" name="text" rows="18" placeholder="ここに本文">{{ default_text }}</textarea>
+
+    <div class="toolbar">
+      <label>表示方向:
+        <select name="writing_mode">
+          <option value="horizontal" {% if writing_mode == 'horizontal' %}selected{% endif %}>横書き</option>
+          <option value="vertical" {% if writing_mode == 'vertical' %}selected{% endif %}>縦書き</option>
+        </select>
+      </label>
+
+      <!-- プレビュー -->
+      <button type="submit">プレビュー</button>
+
+      <!-- ファイル名入力 -->
+      <input
+        type="text"
+        name="filename"
+        placeholder="ファイル名（例: story.txt）"
+        value="{{ last_filename or '' }}"
+      >
+
+      <!-- 🔹 一覧表示ボタン（先に来る） -->
+      <a href="{{ url_for('saves_list') }}" class="btn">保存した作品を一覧表示</a>
+
+      <!-- 🔹 保存ボタン（後に来る） -->
+      <button
+        type="button"
+        class="primary"
+        data-ajax-save
+        data-action="{{ url_for('save_local') }}"
+      >保存</button>
+    </div>
+
+  </form>
+</section>
+
+<!-- ===== 画像アップロード ===== -->
+<section class="panel">
+  <h3>画像アップロード（挿絵）</h3>
+
+  <!-- base.html 側の “未選択トースト” と style.css のカスタムUIに対応 -->
+  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+    <label class="file-uploader">
+      <input type="file" name="file" accept="image/*">
+      <span class="fu-btn">ファイルを選択</span>
+      <span class="fu-name" data-placeholder="ファイルが選択されていません">ファイルが選択されていません</span>
+    </label>
+    <button type="submit" class="primary">アップロード</button>
+  </form>
+
+  <!-- ===== ミニギャラリー ===== -->
+  {% if gallery_items %}
+    <hr>
+    <h2 style="margin:16px 0 8px;">アップロード済み画像</h2>
+
+    <div class="mg-grid">
+      {% for it in gallery_items %}
+      <div class="mg-card">
+        <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank" rel="noopener">
+          <span class="mg-badge">ID: {{ it.id }}</span>
+          <img src="{{ url_for('image_by_id', img_id=it.id) }}" alt="{{ it.original_name or it.stored_name }}">
+        </a>
+        <div class="mg-body">
+          <div class="mg-id">#{{ it.id }}</div>
+          <div class="mg-name" title="{{ it.original_name or it.stored_name }}">{{ it.original_name or it.stored_name }}</div>
+
+          <div class="mg-actions">
+            <input id="tag-{{ it.id }}" class="mg-code" type="text" readonly value="[uploadedimage:{{ it.id }}]">
+            <button class="mg-btn copy" type="button" data-copy="[uploadedimage:{{ it.id }}]">コピー</button>
+
+            <!-- base.html の confirm モーダル（.js-delete）で横取りしてから submit -->
+            <form method="post"
+                  action="{{ url_for('delete_image', img_id=it.id, next='index') }}"
+                  class="js-delete" data-id="{{ it.id }}">
+              <button class="mg-btn delete" type="submit">削除</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <p class="mg-toplink">
+      <a href="{{ url_for('gallery') }}" class="link-button">すべての画像を一覧表示</a>
+    </p>
+  {% else %}
+    <p style="opacity:.8;margin-top:8px;">まだ画像がありません。上のフォームからアップロードしてください。</p>
+  {% endif %}
+</section>
+
+<!-- （画像ギャラリーの）最後の </section> のすぐ後に追加 -->
+<script>
+(() => {
+  // 二重バインド防止
+  const btn = document.querySelector('[data-ajax-save]');
+  if (!btn || btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+
+  btn.addEventListener('click', async () => {
+    const action = btn.dataset.action;                 // 例: "/save_local"
+    const textEl = document.getElementById('text');    // 本文テキストエリア
+    const nameEl = document.querySelector('input[name="filename"]'); // ファイル名入力
+
+    const fd = new FormData();
+    fd.append('text', textEl?.value ?? '');
+    fd.append('filename', (nameEl?.value || '').trim());  // ← 必ず送る
+
+    try {
+      const r = await fetch(action, { method: 'POST', body: fd });
+      const res = await r.json().catch(() => ({}));
+      // 好きなUIに置き換えてOK（トースト等）
+      alert(res.message || (res.success ? '保存しました' : '保存に失敗しました'));
+    } catch (e) {
+      alert('保存に失敗しました: ' + e);
+    }
+  });
+})();
+</script>
+<script>
+(() => {
+  const textEl = document.getElementById('text');
+  const nameEl = document.querySelector('input[name="filename"]');
+  const form   = document.querySelector('form[action$="/preview"]'); // プレビュー用フォーム
+
+  // draft 用キー
+  const draftKey = () => `pixi:draft:${(nameEl?.value || '(untitled)').trim()}`;
+
+  // 1) ロード時：下書きがあれば優先的に復元
+  try {
+    const k = draftKey();
+    const draft = localStorage.getItem(k);
+    if (draft && draft !== textEl.value) {
+      // 自動復元（確認ダイアログにしたい場合は confirm に変更）
+      textEl.value = draft;
+    }
+  } catch(e){ /* ignore */ }
+
+  // 2) 入力の度に下書き保存（軽いデバウンス）
+  let t = null;
+  const saveDraft = () => {
+    try { localStorage.setItem(draftKey(), textEl.value); } catch(e){}
+  };
+  const debounced = () => { clearTimeout(t); t = setTimeout(saveDraft, 250); };
+  textEl.addEventListener('input', debounced);
+
+  // 3) ファイル名を変えたら、既存下書きはそのままにしつつ新キーへも保存
+  nameEl?.addEventListener('change', () => {
+    saveDraft(); // 旧キーへまず保存
+    // 新キーにも複製（必要なら）
+    try { localStorage.setItem(draftKey(), textEl.value); } catch(e){}
+  });
+
+  // 4) プレビュー送信前にも必ず下書き保存
+  form?.addEventListener('submit', () => {
+    saveDraft();
+  });
+
+  // 5) ついでに「保存成功」時に下書きを“正”として固定（任意）
+  const origAlert = window.alert;
+  window.alert = function(msg){
+    try{
+      if (typeof msg === 'string' && msg.includes('保存しました')) {
+        // 保存後の本文を現キーに確定
+        localStorage.setItem(draftKey(), textEl.value);
+      }
+    }catch(e){}
+    return origAlert.apply(this, arguments);
+  };
+})();
+</script>
+
+{% endblock %}

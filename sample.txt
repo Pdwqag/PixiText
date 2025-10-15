@@ -1,0 +1,12 @@
+[chapter:はじめに]
+PixiText の連続スクロール版デモです。[[rb:漢字 > かんじ]] にルビを振れます。
+[newpage]
+[chapter:挿絵]
+[uploadedimage:sample.png]
+[newpage]
+[chapter:リンク]
+[pixivimage:123456789]
+[[jumpuri:pixiv を開く > https://www.pixiv.net/]]
+[newpage]
+[chapter:ページジャンプ]
+2ページに戻る → [jump:2]

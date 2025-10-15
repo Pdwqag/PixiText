@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel gallery-panel">
+  <div class="gallery-header">
+    <h2>アップロード一覧</h2>
+    <a href="{{ url_for('index') }}" class="link-button subtle">エディタへ戻る</a>
+  </div>
+
+  {% if items %}
+    <div class="mg-grid mg-grid-lg">
+      {% for it in items %}
+        <div class="mg-card">
+          <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank" rel="noopener">
+            <span class="mg-badge">ID: {{ it.id }}</span>
+            <img src="{{ url_for('image_by_id', img_id=it.id) }}"
+                 alt="{{ it.original_name or it.stored_name }}">
+          </a>
+          <div class="mg-body">
+            <div class="mg-id">#{{ it.id }}</div>
+            <div class="mg-name" title="{{ it.original_name or it.stored_name }}">{{ it.original_name or it.stored_name }}</div>
+            <div class="mg-actions">
+              <input class="mg-code" type="text" readonly value="[uploadedimage:{{ it.id }}]">
+              <button class="mg-btn copy" type="button" data-copy="[uploadedimage:{{ it.id }}]">コピー</button>
+              <form method="post"
+                    action="{{ url_for('delete_image', img_id=it.id, next='index') }}"
+                    class="js-delete" data-id="{{ it.id }}">
+                <button class="mg-btn delete" type="submit">削除</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty-hint">まだ画像がありません。</p>
+  {% endif %}
+</section>
+{% endblock %}

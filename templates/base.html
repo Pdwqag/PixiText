@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PixiText Tool</title>
+
+  <!-- PWA 周り -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
+
+  <!-- ★ CSS を必ず読み込む（キャッシュバスト付き） -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ config.get('BUILD_VER', 1) }}">
+
+  <!-- ★ 開発中は SW を登録しない（localhost/127.0.0.1/::1） -->
+  <script>
+    const isLocal = ['127.0.0.1','localhost','::1'].includes(location.hostname);
+    if ('serviceWorker' in navigator && !isLocal) {
+      navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}?v={{ config.get("BUILD_VER", 1) }}');
+    }
+  </script>
+</head>
+
+<body>
+  <header class="site-header">
+    <h1>PixiText（ローカル）</h1>
+    {% if request.endpoint == 'preview' %}
+      <a href="{{ url_for('index') }}" class="back-button" aria-label="エディタに戻る">
+        <span class="icon">←</span>エディタに戻る
+      </a>
+    {% endif %}
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- 確認モーダル（共通・1個だけ） -->
+  <div id="confirm-overlay" class="modal-overlay" hidden>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h3 id="confirm-title">確認</h3>
+      <p id="confirm-msg">この操作を実行しますか？</p>
+      <div class="modal-actions">
+        <button type="button" class="btn danger" id="confirm-ok">削除する</button>
+        <button type="button" class="btn" id="confirm-cancel">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <footer class="site-footer">
+    <small>© You — 個人利用専用</small>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}?v={{ config.get('BUILD_VER', 1) }}"></script>
+
+  <script>
+  /* ========= 単一インスタンスのトースト ========= */
+  (()=>{
+    let toast, hideTimer;
+    window.showToast = (msg) => {
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.className = 'toast-alert';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(()=> toast.classList.remove('show'), 2400);
+    };
+  })();
+
+  /* ========= 確認モーダル（削除共通） ========= */
+(()=>{
+  const ov   = document.getElementById('confirm-overlay');
+  const msg  = document.getElementById('confirm-msg');
+  const ok   = document.getElementById('confirm-ok');
+  const cancel = document.getElementById('confirm-cancel');
+  let onOk = null;
+
+  function close(){
+    ov.classList.remove('show');
+    setTimeout(()=>{
+      ov.style.display = 'none';
+      ov.hidden = true;
+    }, 120);
+    ok.onclick = null;
+    cancel.onclick = null;
+    ov.onclick = null;
+    document.removeEventListener('keydown', onEsc);
+  }
+
+  function onEsc(e){ if(e.key === 'Escape') close(); }
+
+  window.openConfirm = (text, handler)=>{
+    msg.textContent = text || 'この操作を実行しますか？';
+    onOk = handler || null;
+    ov.hidden = false;
+    ov.style.display = 'flex';
+    requestAnimationFrame(()=> ov.classList.add('show'));
+    ok.onclick = ()=>{ close(); onOk && onOk(); };
+    cancel.onclick = close;
+    ov.onclick = (e)=>{ if(e.target === ov) close(); };
+    document.addEventListener('keydown', onEsc);
+  };
+
+  // ✅ 削除フォームだけを対象にする（保存などはブロックしない）
+  document.addEventListener('submit', (e)=>{
+    const f = e.target;
+    // js-delete クラスを持つフォームだけに限定
+    if (!f.classList.contains('js-delete')) return;
+
+    // ここで初めてブロック
+    e.preventDefault();
+
+    const what = f.dataset.what || '項目';
+    const id   = f.dataset.id ? `（${f.dataset.id}）` : '';
+    openConfirm(`${what}を削除しますか？${id}`, ()=> f.submit());
+  });
+})();
+
+
+
+
+  /* ========= 画像アップロード：ファイル未選択のときのトースト ========= */
+  document.addEventListener('submit', (e)=>{
+    const form = e.target;
+    if (form.matches('form[action*="upload"]')) {
+      const fileInput = form.querySelector('input[type="file"]');
+      if (!fileInput || !fileInput.files.length) {
+        e.preventDefault();
+        showToast('ファイルを選択してください');
+      }
+    }
+  });
+
+  /* ========= ギャラリーのコピー ========= */
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('.mg-btn.copy');
+    if (!btn) return;
+    const srcInput = btn.previousElementSibling;
+    const text = btn.getAttribute('data-copy') || (srcInput && srcInput.value) || '';
+    if (!text) return;
+    try{
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      const old = btn.textContent.trim() || 'コピー';
+      btn.textContent = 'コピー済み';
+      setTimeout(()=> btn.textContent = old, 1200);
+    }catch(err){
+      console.warn(err); showToast('コピーに失敗しました');
+    }
+  });
+
+  /* ========= カスタム file ボタン名の反映 ========= */
+  document.addEventListener('change', (e)=>{
+    const input = e.target.closest('.file-uploader input[type="file"]');
+    if (!input) return;
+    const nameEl = input.parentElement.querySelector('.fu-name');
+    if (nameEl) nameEl.textContent = input.files?.[0]?.name || nameEl.dataset.placeholder || 'ファイルが選択されていません';
+  });
+  </script>
+
+  <script>
+  /* 保存(ajax) */
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-ajax-save]');
+    if (!btn) return;
+
+    const action = btn.getAttribute('data-action') || '/save_local';
+
+    // 同じフォーム内から値を拾う（無ければドキュメント全体から）
+    const scope = btn.closest('form') || document;
+    const textEl = scope.querySelector('textarea[name="text"]');
+    const nameEl = scope.querySelector('input[name="filename"]');
+
+    const text = textEl ? textEl.value : '';
+    const filename = nameEl ? nameEl.value : '';
+
+    const fd = new FormData();
+    fd.append('text', text);
+    fd.append('filename', filename);
+
+    try {
+      const res = await fetch(action, { method: 'POST', body: fd });
+      // サーバは JSON を返す前提
+      const data = await res.json();
+      if (data?.success) {
+        window.showToast ? showToast(data.message || '保存しました')
+                        : alert(data.message || '保存しました');
+      } else {
+        window.showToast ? showToast(data?.message || '保存に失敗しました')
+                        : alert(data?.message || '保存に失敗しました');
+      }
+    } catch (err) {
+      window.showToast ? showToast('通信エラー') : alert('通信エラー');
+      console.warn(err);
+    }
+  });
+  </script>
+
+</body>
+</html>

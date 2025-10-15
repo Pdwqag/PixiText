@@ -1,0 +1,15 @@
+
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>プレビュー</h2>
+  <div class="preview-controls">
+    <form method="post" action="{{ url_for('export') }}">
+      <input type="hidden" name="text" value="{{ request.form.get('text', '')|e }}">
+      <input type="hidden" name="writing_mode" value="{{ writing_mode }}">
+      <button type="submit">HTMLとして保存</button>
+    </form>
+  </div>
+  <div class="rendered">{{ html|safe }}</div>
+</section>
+{% endblock %}
