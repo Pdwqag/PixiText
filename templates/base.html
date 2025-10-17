@@ -5,19 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PixiText Tool</title>
 
-  <!-- PWA 周り -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
 
-  <!-- ★ CSS を必ず読み込む（キャッシュバスト付き） -->
+  <!-- ① まず style.css（キャッシュ対策の ?v は据え置きでOK） -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ config.get('BUILD_VER', 1) }}">
 
-  <!-- ★ 開発中は SW を登録しない（localhost/127.0.0.1/::1） -->
+  <!-- ③ SW 登録（開発では無効、本番のみ） -->
   <script>
     const isLocal = ['127.0.0.1','localhost','::1'].includes(location.hostname);
     if ('serviceWorker' in navigator && !isLocal) {
-      navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}?v={{ config.get("BUILD_VER", 1) }}');
+      navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}');
     }
   </script>
 </head>
@@ -34,11 +33,15 @@
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-      <div class="flash-container">
-        {% for category, message in messages %}
-          <div class="flash {{ category }}">{{ message }}</div>
-        {% endfor %}
-      </div>
+      <script>
+        (function(){
+          const msgs = {{ messages|tojson }};
+          msgs.forEach((pair, i) => {
+            const msg = Array.isArray(pair) ? pair[1] : pair;
+            setTimeout(() => { window.showToast && showToast(msg); }, i * 300);
+          });
+        })();
+      </script>
     {% endif %}
   {% endwith %}
 
@@ -58,12 +61,11 @@
     </div>
   </div>
 
-
-
   <footer class="site-footer">
     <small>© You — 個人利用専用</small>
   </footer>
 
+  <!-- ④ JS は最後に1回だけ -->
   <script src="{{ url_for('static', filename='app.js') }}?v={{ config.get('BUILD_VER', 1) }}"></script>
 
   <script>

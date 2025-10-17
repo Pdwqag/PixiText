@@ -12,6 +12,7 @@ RE_JUMP_BLK = re.compile(r'^\[jump:(\d+)\]$')
 RE_JUMP_INL = re.compile(r'\[jump:(\d+)\]')
 RE_JUMPURI  = re.compile(r'\[\[jumpuri:(.*?)\s*(?:>|&gt;)\s*(.*?)\]\]')
 RE_RUBY     = re.compile(r'\[\[rb:(.*?)\s*(?:>|&gt;)\s*(.*?)\]\]')
+RE_CHAPTER = re.compile(r'^\[chapter:(.+?)\]\s*', re.MULTILINE)
 
 BASE_DIR   = os.path.dirname(__file__)
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -19,6 +20,7 @@ DB_PATH    = os.path.join(UPLOAD_DIR, "uploads.json")
 
 # ---------- 前処理 ----------
 def _preprocess(text: str) -> str:
+     
     text = text.replace('\r\n', '\n').replace('\r', '\n')
     import re
     text = re.sub(r'(?m)(?<!\n)\n(\s*\[chapter:[^\]]+\])', r'\n\n\1', text)
@@ -28,7 +30,7 @@ def _preprocess(text: str) -> str:
 
 def split_pages(text: str):
     parts = RE_NEWPAGE.split(text)
-    return [p.strip() for p in parts]
+    return [p.rstrip() for p in parts]
 
 # ---------- アップロード画像解決 ----------
 def _load_upload_db():
@@ -61,32 +63,38 @@ def render_inline(text: str) -> str:
     text = RE_JUMP_INL.sub(lambda m: f'<a class="jump" href="#{m.group(1)}">{m.group(1)}ページへ</a>', text)
     return text
 
-# ---------- ブロック ----------
 def render_block(block: str, page_index: int) -> str:
     s = block.rstrip("\n")
 
-    # --- 章見出し ---
+    out_parts = []   # ← 章見出し後もここに追記していく
+
+    # --- 章見出し（ブロック先頭が [chapter:... ] ）---
     if s.startswith("[chapter:"):
         end = s.find("]")
         if end != -1:
             raw_title = s[len("[chapter:"):end]
-            rest = s[end+1:].lstrip()
-            html = f'<h2 class="chapter">{escape(raw_title)}</h2>'
-            if rest:
-                html += f"<p>{render_inline(escape(rest).replace('\\n','<br>'))}</p>"
-            return html
+            # 見出しをまず出力
+            out_parts.append(f'<h2 class="chapter">{escape(raw_title)}</h2>')
+            # 章タグの「後ろに続く本文」を残りとして再処理する
+            s = s[end+1:]            # ']' の後ろから最後まで
+            s = s.lstrip("\n ")      # 先頭の改行や空白は削っておく
+            if not s.strip():
+                # 本文が何も無いなら 1 行分の空白を入れて終了
+                out_parts.append('<div class="blankline" aria-hidden="true"></div>')
+                return "".join(out_parts)
+            # （本文がある場合は、このまま下の「行混在処理」へ落ちる）
+    # ここから下は、章の有無に関わらず s に入っている本文を
+    # 行単位（テキスト / 空行 / [uploadedimage:*]）で処理する
 
-    # --- 行単位で混在処理（テキストと [uploadedimage:*] が同ブロックにあってもOK） ---
     lines = s.split("\n")
-    out_parts = []
-    buf = []  # テキスト行バッファ
+    buf = []
 
     def flush_buf():
+        nonlocal buf
         if buf:
-            # バッファを段落として出力
             esc = escape("\n".join(buf)).replace("\n", "<br>")
             out_parts.append(f"<p>{render_inline(esc)}</p>")
-            buf.clear()
+            buf = []
 
     for line in lines:
         m = RE_UPLOADED.match(line.strip())
@@ -96,23 +104,23 @@ def render_block(block: str, page_index: int) -> str:
             src, alt = _resolve_uploaded_src(token)
             if src.startswith("/image/") and alt == token:
                 out_parts.append(
-                    f'<figure class="illustration missing"><div class="img-missing">画像が見つかりません: {alt}</div></figure>'
+                    '<figure class="illustration missing"><div class="img-missing">'
+                    f'画像が見つかりません: {escape(alt)}</div></figure>'
                 )
             else:
-                # ※ figcaption を付けない（= 謎の数字を出さない）
-                out_parts.append(f'<figure class="illustration"><img src="{src}" alt="{alt}"></figure>')
+                out_parts.append(f'<figure class="illustration"><img src="{src}" alt="{escape(alt)}"></figure>')
         else:
-            if line == "":            # ← 空行に遭遇
+            if line == "":
                 flush_buf()
                 out_parts.append('<div class="blankline" aria-hidden="true"></div>')
             else:
                 buf.append(line)
-    flush_buf()
 
+    flush_buf()
     if out_parts:
         return "".join(out_parts)
 
-    # --- pixiv（ブロックが丸ごと一致の時だけ） ---
+    # --- （ここから下は章でも画像でもなかった時のフォールバック達） ---
     m = RE_PIXIV.match(s)
     if m:
         pid = m.group(1)
@@ -120,15 +128,14 @@ def render_block(block: str, page_index: int) -> str:
         return (f'<figure class="pixiv-illustration"><a href="{link}" target="_blank" rel="noopener noreferrer">'
                 f'pixiv作品 {pid} を開く</a><figcaption>pixiv作品ID: {pid}</figcaption></figure>')
 
-    # --- jump ブロック ---
     m = RE_JUMP_BLK.match(s)
     if m:
         target = int(m.group(1))
         return f'<a class="jump" href="#{target}">{target}ページへ</a>'
 
-    # --- 通常テキスト ---
-    esc = escape(block).replace('\n', '<br>')
+    esc = escape(s).replace('\n', '<br>')
     return f'<p>{render_inline(esc)}</p>'
+
 
 
 
@@ -142,6 +149,23 @@ def parse_document(text: str):
         html_blocks = [render_block(b, i) for b in blocks]
         pages.append({"index": i, "html": "\n".join(html_blocks)})
     return pages
+
+
+
+# ---------- 段落 ----------
+def replace_chapter(text: str) -> str:
+    # ドキュメント先頭での置換を優先（count=1）
+    return RE_CHAPTER.sub(r'<h2 class="chapter-title">\1</h2>\n\n', text, count=1)
+
+def text_to_paragraphs(text: str) -> str:
+    blocks = [b.strip() for b in re.split(r'\n{2,}', text) if b.strip()]
+    html_blocks = []
+    for b in blocks:
+        b = b.replace('\n', '<br>')  # 1 改行は改行タグに
+        html_blocks.append(f'<p>{b}</p>')
+    return '\n'.join(html_blocks)
+
+
 
 # ---------- HTML出力 ----------
 def to_html_document(pages, writing_mode: str = "horizontal", include_boilerplate: bool = False) -> str:
