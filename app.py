@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, redirect, url_for, send_file,
 from werkzeug.utils import secure_filename
 from parser import parse_document, to_html_document
 from datetime import datetime
+from flask_session import Session
 
 BASE_DIR     = os.path.dirname(__file__)
 TEMPLATES_DIR= os.path.join(BASE_DIR, "templates")
@@ -20,6 +21,27 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 app = Flask(__name__, static_url_path="/static", static_folder=STATIC_DIR, template_folder=TEMPLATES_DIR)
 app.config["UPLOAD_FOLDER"] = UPLOAD_DIR
 app.secret_key = "change-me"
+app.config['SESSION_TYPE'] = 'filesystem'  # ← cookieではなくサーバー保存に変更
+app.config['SESSION_FILE_DIR'] = os.path.join(BASE_DIR, "flask_session")  # 保存場所
+app.config['SESSION_PERMANENT'] = False
+app.config["BUILD_VER"] = 23
+
+@app.after_request
+def _no_cache_static_css(resp):
+    try:
+        from flask import request
+        if request.path.endswith('/static/style.css'):
+            resp.headers['Cache-Control'] = 'no-store'
+    except Exception:
+        pass
+    return resp
+
+sess_dir = os.path.join(BASE_DIR, "flask_session")
+os.makedirs(sess_dir, exist_ok=True) 
+app.config['SESSION_FILE_DIR'] = sess_dir
+
+Session(app)
+
 
 def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -88,7 +110,6 @@ def index():
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
-
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -290,8 +311,22 @@ def saves_auto_open():
     # 何もしない：204 No Contentで返す
     return ("", 204)
 
+@app.after_request
+def _no_cache_static(resp):
+    from flask import request
+    p = request.path
+    # CSS/JS は常に最新版
+    if p.startswith('/static/') and (p.endswith('.css') or p.endswith('.js')):
+        resp.headers['Cache-Control'] = 'no-store, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+    return resp
+
+
+
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", "7860"))  # ← Render が渡すPORTを尊重
     # 0.0.0.0 で待ち受け（127.0.0.1固定はNG）
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+
