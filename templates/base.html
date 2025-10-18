@@ -184,35 +184,58 @@
   /* 保存(ajax) */
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-ajax-save]');
-    if (!btn) return;
+    if (!btn || btn.dataset.bound === '1') return;
 
     const action = btn.getAttribute('data-action') || '/save_local';
 
-    // 同じフォーム内から値を拾う（無ければドキュメント全体から）
     const scope = btn.closest('form') || document;
     const textEl = scope.querySelector('textarea[name="text"]');
     const nameEl = scope.querySelector('input[name="filename"]');
 
     const text = textEl ? textEl.value : '';
-    const filename = nameEl ? nameEl.value : '';
+    const filenameInput = nameEl ? nameEl.value : '';
+    const trimmedName = (filenameInput || '').trim();
 
     const fd = new FormData();
     fd.append('text', text);
-    fd.append('filename', filename);
+    fd.append('filename', trimmedName);
+
+    const notify = (msg) => {
+      if (window.showToast) {
+        showToast(msg);
+        return;
+      }
+      let fallback = document.getElementById('ajax-save-toast');
+      if (!fallback) {
+        fallback = document.createElement('div');
+        fallback.id = 'ajax-save-toast';
+        fallback.className = 'toast-alert';
+        document.body.appendChild(fallback);
+      }
+      fallback.textContent = msg;
+      fallback.classList.add('show');
+      setTimeout(() => fallback.classList.remove('show'), 2400);
+    };
 
     try {
       const res = await fetch(action, { method: 'POST', body: fd });
-      // サーバは JSON を返す前提
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data?.success) {
-        window.showToast ? showToast(data.message || '保存しました')
-                        : alert(data.message || '保存しました');
+        if (nameEl && data.filename) {
+          nameEl.value = data.filename;
+        }
+        notify(data.message || '保存しました');
+        const detail = {
+          text,
+          filename: data?.filename || trimmedName,
+          message: data?.message || '保存しました',
+        };
+        document.dispatchEvent(new CustomEvent('pixi:saved', { detail }));
       } else {
-        window.showToast ? showToast(data?.message || '保存に失敗しました')
-                        : alert(data?.message || '保存に失敗しました');
+        notify(data?.message || '保存に失敗しました');
       }
     } catch (err) {
-      window.showToast ? showToast('通信エラー') : alert('通信エラー');
+      notify('通信エラー');
       console.warn(err);
     }
   });
