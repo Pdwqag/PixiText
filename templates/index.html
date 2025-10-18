@@ -49,7 +49,13 @@
         class="primary"
         data-ajax-save
         data-action="{{ url_for('save_local') }}"
-      >保存</button>
+      >クラウドに保存</button>
+
+      <button
+        type="submit"
+        formaction="{{ url_for('export') }}"
+        formmethod="post"
+      >HTMLとして保存</button>
     </div>
 
   </form>

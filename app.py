@@ -174,7 +174,12 @@ def export():
     writing_mode = request.form.get("writing_mode","horizontal")
     session['last_text'] = text; session['last_writing_mode'] = writing_mode
     pages = parse_document(text)
-    html_doc = to_html_document(pages, writing_mode=writing_mode, include_boilerplate=True)
+    html_doc = to_html_document(
+        pages,
+        writing_mode=writing_mode,
+        include_boilerplate=True,
+        inline_assets=True,
+    )
     out_path = os.path.join(BASE_DIR, "export.html")
     with open(out_path, "w", encoding="utf-8") as f: f.write(html_doc)
     return send_file(out_path, as_attachment=True, download_name="export.html")
