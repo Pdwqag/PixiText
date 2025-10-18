@@ -332,13 +332,15 @@ a.jump{ text-decoration:underline; cursor:pointer; }
 /* === Preview / Rendered images =================================== */
 
 /* 囲みブロックのベース */
-.rendered .illustration{
+.rendered .illustration,
+.document .illustration{
   margin: 14px auto;
   text-align: center;
 }
 
 /* 画像サイズの標準化（横書き想定） */
-.rendered .illustration img{
+.rendered .illustration img,
+.document .illustration img{
   display: block;
   width: min(100%, 680px);  /* 横幅の上限（好みで 600〜800px くらい） */
   height: auto;

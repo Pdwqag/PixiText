@@ -1,17 +1,497 @@
 <!doctype html>
 <html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PixiText Export</title><link rel="stylesheet" href="static/style.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PixiText Export</title><style>
+/* =====================================================================
+   PixiText CSS (Refactored & De-duped)
+   - ダークトーン固定
+   - 章見出し/区切りだけ“キリッ”を強化
+   - 既存UIの見た目は維持（危険な!important削減）
+   ===================================================================== */
+
+
+/* ===== @01 Variables & Fonts (:root) ===== */
+:root{
+  /* 基本トーン */
+  --bg:#1d2d4d; --card:#151a27; --elev:#1a2947; --fg:#e7edf8; --muted:#9fb0c7;
+  --border:#1d2a3c; --shadow:0 12px 40px rgb(0 0 0 / .35);
+
+  /* アクセント */
+  --accent:#6aa8ff; --accent-2:#a78bfa; --accent-3:#64e6cf;
+
+  /* 意味色 */
+  --ok:#64d4a1; --danger:#f06a7a;
+
+  /* グラデーション種 */
+  --primary-1:#2e5cff; --primary-2:#46b3ff;
+  --danger-1:#7a2b36;  --danger-2:#4a1f26;
+
+  /* 寸法・フォント */
+  --radius:14px; --radius-sm:10px; --radius-lg:18px;
+  --gap:16px; --gap-sm:10px; --gap-lg:22px; --pager-height:72px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+          "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+}
+
+
+/* ===== @02 Base ===== */
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+
+:root {
+  color-scheme: dark; /* ← システムに“ダークモードで描画して”と伝える */
+}
+input, select, textarea, button {
+  background-color: var(--elev);
+  color: var(--fg);
+}
+
+a{ color:var(--accent); text-decoration:none; }
+a:hover{ text-decoration:underline; }
+
+textarea {
+  background:
+    linear-gradient(180deg, #1f3b70, #0c2c70 85%), /* ベースの暗色 */
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 67%, transparent), transparent 70%);
+  background-blend-mode: overlay;
+  border: 1px solid #2b3a56;
+  color: #dbe5f4;
+  border-radius: 10px;
+  font-family: var(--mono);
+  min-height: 280px;
+}
+
+
+
+/* ===== @03 Header & Footer ===== */
+.site-header,.site-footer{
+  padding:14px 18px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; z-index:10;
+  background:linear-gradient(180deg, rgb(255 255 255 / .03), rgb(0 0 0 / .03));
+  backdrop-filter:saturate(1.1) blur(6px); -webkit-backdrop-filter:saturate(1.1) blur(6px);
+}
+.site-footer{ position:static; border-top:1px solid var(--border); border-bottom:0; }
+
+
+/* ===== @04 Layout ===== */
+main{ padding:22px; max-width:1120px; margin:0 auto; }
+
+
+/* ===== @05 Panels & Headings ===== */
+.panel{
+  border:1px solid var(--border); border-radius:var(--radius); padding:18px;
+  box-shadow:var(--shadow);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / .03), rgb(0 0 0 / .06)), ,
+    var(--card);
+  background-blend-mode: overlay;
+}
+
+.panel + .panel{ margin-top:var(--gap); }
+
+h1,h2,h3{ margin:0 0 10px; letter-spacing:.2px; }
+h2{ font-size:clamp(1.25rem, 1.2rem + .6vw, 1.6rem); }
+h3{ font-size:clamp(1.05rem, 1rem + .35vw, 1.2rem); opacity:.95; }
+
+/* 見出しの“キリッ”強化（太線は廃止して細線＋淡いグローに統一） */
+.panel h2{
+  position:relative; padding-bottom:10px; margin-bottom:16px; border-bottom:1px solid var(--border);
+}
+.panel h2::after{
+  content:""; position:absolute; left:0; right:0; bottom:-1px; height:3px;
+  background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 40%, transparent), transparent 60%);
+  opacity:.6;
+}
+
+
+/* ===== @06 Inputs & Buttons ===== */
+textarea, input[type="text"], input[type="file"], select, .mg-code{
+  width:96.7%; background:var(--elev); color:var(--fg);
+  border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:12px; outline:none; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+textarea{ font-family:var(--mono); min-height:280px; }
+textarea {
+  background: linear-gradient(180deg, #151923, #11141e);
+  border: 1px solid #26324a;
+  color: #dbe5f4;
+}
+
+
+button, .btn{
+  appearance:none; border:1px solid var(--border); color:var(--fg); cursor:pointer;
+  background:linear-gradient(180deg, #1b2435, #141b2b);
+  padding:10px 14px; border-radius:10px; font-weight:700; letter-spacing:.1px;
+  transition:transform .08s ease, filter .12s ease, border-color .12s ease, background .12s ease;
+}
+button:hover{ filter:brightness(1.08); border-color:#182138; }
+button:active{ transform:translateY(1px); }
+
+/* ← ここを “カンマ無し＋ブロックで” 定義 */
+button.primary{
+  background: linear-gradient(135deg, var(--primary-1), var(--primary-2));
+  border-color: color-mix(in srgb, var(--primary-2) 60%, #000 40%);
+}
+
+/* 画像アップロードフォームの並びと間隔を統一 */
+form[action*="upload"]{
+  display:flex;
+  flex-direction:column;
+  gap:14px;           /* ← 縦の間隔（好きな値に） */
+  margin-top:10px;
+}
+form[action*="upload"] .file-uploader{ width:100%; }
+form[action*="upload"] button[type="submit"]{ align-self:flex-start; }
+form[action*="upload"] input[type="file"] + button[type="submit"]{ margin-top:14px; }
+
+button.danger{
+  background:linear-gradient(135deg, var(--danger-1), var(--danger-2));
+  border-color:color-mix(in srgb, var(--danger-1) 65%, #000 35%);
+}
+
+/* 光沢リンクボタン */
+.link-button,.back-button{
+  display:inline-flex; align-items:center; gap:8px; padding:10px 18px;
+  border:1px solid rgb(255 255 255 / .12); border-radius:8px;
+  background:linear-gradient(145deg, #131823, #0e121a);
+  color:var(--fg); font-weight:600; font-size:.95rem; text-decoration:none; letter-spacing:.02em;
+  box-shadow:inset 0 0 6px rgb(255 255 255 / .05); transition:all .25s ease;
+}
+.link-button:hover,.back-button:hover{
+  border-color:rgb(255 255 255 / .25); color:#fff;
+  box-shadow:0 0 12px rgba(16, 46, 75, 0.3), inset 0 0 10px rgb(255 255 255 / .08);
+  transform:translateY(-1px);
+}
+.link-button:active,.back-button:active{
+  transform:translateY(1px);
+  box-shadow:0 0 6px rgb(100 180 255 / .25), inset 0 0 6px rgb(255 255 255 / .05);
+}
+.back-button .icon{ font-size:1rem; color:var(--accent-3); transition:color .25s ease; }
+.back-button:hover .icon{ color:var(--accent); }
+.link-button{ background:linear-gradient(145deg, #151a25, #11141c); border-color:rgb(255 255 255 / .15); color:var(--accent-2); }
+.link-button:hover{ color:var(--fg); border-color:var(--accent-2); }
+
+
+
+/* ===== @07 Toolbar & Shortcuts ===== */
+.toolbar{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:12px; margin-bottom:20px;
+}
+.toolbar label{ display:inline-flex; align-items:center; gap:8px; color:var(--muted); white-space:nowrap; }
+.toolbar label select{ min-width:110px; }
+.toolbar input[name="filename"]{
+  background:var(--elev); color:var(--fg); border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+}
+.toolbar input[name="filename"]::placeholder{ color:var(--muted); }
+
+.shortcut-bar{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 12px; }
+.shortcut-bar .ins{
+  background:linear-gradient(180deg, #1b2030, #161b28); color:#80a3e2; border:1px solid #2a3346;
+  border-radius:999px; padding:6px 12px; font:600 .86rem/1 var(--sans);
+}
+.shortcut-bar .ins:hover{ filter:brightness(1.12); }
+
+
+/* ===== @08 Chapter Title ===== */
+.chapter{
+  font-size: clamp(1.35rem, 1.1rem + .9vw, 1.9rem); font-weight:800;
+  margin:10px 0 14px; padding-left:14px; line-height:1.35; border-left:4px solid color-mix(in srgb, var(--accent) 85%, #fff 0%);
+}
+
+/* 章見出し・段落の最終統一（重複排除済み） */
+.document .page .page-inner h2.chapter{ margin-top:0; margin-bottom:1.6em; line-height:1.4; }
+.document .page .page-inner h2.chapter + p{ margin-top:.8em; }
+.document .page .page-inner h2.chapter + .blankline{ height:1.2em; }
+.blankline{ height:1em; }
+.document .page-inner p{ margin:0; line-height:1.9; }
+.document .page-inner p + p{ margin-top:1em; }
+
+
+/* ===== @09 Document Preview ===== */
+.document .page{
+  max-width:760px; margin:26px auto;
+  background:linear-gradient(180deg, #121724, #10141f);
+  border:1px solid #263754; border-radius:12px;
+}
+.document .page .page-inner{ padding:28px; }
+.document.horizontal .page .page-inner{ writing-mode:horizontal-tb; }
+.document.vertical .page .page-inner{ writing-mode:vertical-rl; text-orientation:mixed; }
+.document .page + .page{ margin-top:44px; }
+ruby rt{ font-size:.62em; color:var(--muted); }
+a.jump{ text-decoration:underline; cursor:pointer; }
+
+
+/* ===== @10 Bottom Pager ===== */
+.bottom-pager{
+  position:fixed; left:0; right:0; bottom:0; height:var(--pager-height); z-index:999;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(180deg, rgb(255 255 255 / .02), rgb(0 0 0 / .4));
+  border-top:1px solid var(--border); backdrop-filter: blur(8px);
+}
+.bottom-pager .pager-center{ display:flex; gap:14px; }
+.bottom-pager .page-number{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:34px; height:34px; border-radius:999px; background:#2a2f3c; color:#cdd5df; font-weight:800;
+}
+.bottom-pager .page-number.active{ background:#e6edf8; color:#0b1220; }
+.bottom-pager .page-arrow{ color:#cbd2de; font-size:18px; }
+
+
+/* ===== @11 Mini Gallery ===== */
+.mg-grid{ --mg-gap:12px; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:var(--mg-gap); margin-top:12px; }
+.mg-card{
+  position:relative; background:linear-gradient(180deg, #171b26, #131722);
+  border:1px solid #2b3a56; border-radius:var(--radius); overflow:hidden;
+  box-shadow:0 14px 44px rgb(0 0 0 / .42); transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.mg-card:hover{ transform:translateY(-2px); box-shadow:0 12px 40px rgb(0 0 0 / .45); border-color:#3a4b6e; }
+.mg-thumb{ position:relative; background:#0f1117; overflow:hidden; }
+.mg-thumb::before{ content:""; display:block; padding-top:66.666%; }
+.mg-thumb > img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; }
+.mg-badge{
+  position:absolute; left:10px; top:10px; background:rgb(0 0 0 / .55); color:#fff;
+  font-size:.75rem; padding:.3rem .55rem; border-radius:999px; border:1px solid rgb(255 255 255 / .12);
+  backdrop-filter: blur(6px);
+}
+.mg-body{ padding:12px; }
+.mg-id{ font:800 .95rem/1.1 var(--sans); letter-spacing:.3px; }
+.mg-name{ color:var(--muted); font-size:.85rem; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mg-actions{ display:flex; align-items:center; gap:8px; margin-top:10px; }
+.mg-code{
+  flex:1; background:#0f1219; color:#d3dae4; border:1px solid #2a3040; border-radius:10px;
+  font:700 .8rem/1.1 var(--mono); padding:9px 10px; height:36px; display:flex; align-items:center;
+}
+.mg-btn{
+  background:linear-gradient(180deg, #293043, #22283a); color:#e6eaf0; border:1px solid #363d4f;
+  border-radius:10px; padding:9px 10px; font:700 .8rem/1 var(--sans); cursor:pointer; height:36px; display:flex; align-items:center;
+}
+.mg-btn.delete{ background:linear-gradient(145deg, #b82c3a, #861f29); border:1px solid color-mix(in srgb, #b82c3a 70%, #000 30%); color:#fff; }
+.mg-btn:hover{ filter:brightness(1.1); }
+.mg-toplink{ margin-top:16px; }
+
+
+/* ===== @12 File Uploader ===== */
+.file-uploader{
+  display:flex; align-items:center; gap:12px; width:100%;
+  background:linear-gradient(180deg, #161b27, #121722);
+  border:1px solid #2a3a56; border-radius:10px; padding:10px 12px; position:relative;
+}
+.file-uploader input[type="file"]{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+.file-uploader .fu-btn{
+  padding:8px 12px; border-radius:8px; font-weight:700;
+  background:linear-gradient(135deg, var(--primary-1), var(--primary-2));
+  border:1px solid color-mix(in srgb, var(--primary-2) 60%, #000 40%); color:#fff; white-space:nowrap;
+  transition: filter .2s ease, transform .1s ease;
+}
+.file-uploader .fu-btn:hover{ filter:brightness(1.1); transform:translateY(-1px); }
+.file-uploader .fu-name{ flex:1; min-width:0; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+
+/* ===== @13 Scrollbar (Chromium) ===== */
+*::-webkit-scrollbar{ width:10px; height:10px; }
+*::-webkit-scrollbar-thumb{ background:#2b3243; border-radius:999px; }
+*::-webkit-scrollbar-track{ background:transparent; }
+
+
+/* ===== @14 Toast ===== */
+.toast-alert{
+  position:fixed; left:50%; bottom:-60px; transform:translateX(-50%);
+  background:linear-gradient(135deg,#3a7bff,#68b0ff);
+  color:#fff; padding:12px 22px; border-radius:10px; font-weight:600; font-size:.95rem;
+  box-shadow:0 6px 20px rgba(0,0,0,.4); opacity:0; z-index:1500; transition:all .35s ease;
+}
+.toast-alert.show{ bottom:28px; opacity:1; }
+
+
+/* ===== @15 Flash (Flask) ===== */
+.flash-container{ position:fixed; bottom:30px; left:50%; transform:translateX(-50%); z-index:1000; display:none !important; }
+.flash{ background:rgba(30,40,60,.9); color:#fff; padding:10px 20px; border-radius:8px; font-size:14px; animation: fadeInOut 2.5s ease; }
+.flash.success{ border:1px solid #4caf50; } .flash.error{ border:1px solid #e53935; }
+@keyframes fadeInOut{ 0%,100%{ opacity:0; transform:translate(-50%,20px);} 10%,90%{ opacity:1; transform:translate(-50%,0);} }
+
+
+/* ===== @16 Modal ===== */
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  display:none; align-items:center; justify-content:center; z-index:9999;
+  opacity:0; transition:opacity .25s ease;
+}
+.modal-overlay.show{ display:flex; opacity:1; }
+.modal-dialog{
+  width:min(520px, calc(100% - 32px));
+  background:linear-gradient(180deg, #151b2a, #121726);
+  border:1px solid #253049; border-radius:14px; box-shadow:0 18px 60px rgba(0,0,0,.45);
+  color:#e7edf8; padding:18px; text-align:left; animation: modalFadeIn .2s ease;
+}
+@keyframes modalFadeIn{ from{ transform:scale(.95); opacity:0;} to{ transform:scale(1); opacity:1;} }
+.modal-dialog h3{ margin:0 0 8px; font-size:1.05rem; letter-spacing:.2px; }
+.modal-dialog p{ margin:0 0 14px; color:#a6b3c9; line-height:1.6; }
+.modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
+.modal-actions .btn{ appearance:none; border:1px solid #2b3246; background:linear-gradient(180deg, #242b3f, #1b2133); color:#e7edf8; padding:9px 14px; border-radius:10px; cursor:pointer; }
+.modal-actions .btn.danger{ border-color:#6f2d39; background:linear-gradient(180deg, #5a2730, #401e24); }
+.modal-actions .btn:hover{ filter:brightness(1.08); }
+
+
+/* === Preview / Rendered images =================================== */
+
+/* 囲みブロックのベース */
+.rendered .illustration,
+.document .illustration{
+  margin: 14px auto;
+  text-align: center;
+}
+
+/* 画像サイズの標準化（横書き想定） */
+.rendered .illustration img,
+.document .illustration img{
+  display: block;
+  width: min(100%, 680px);  /* 横幅の上限（好みで 600〜800px くらい） */
+  height: auto;
+  max-height: 72vh;         /* 画面よりデカくなりすぎないように */
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35);
+  margin-inline: auto;
+}
+
+/* 縦書きページでは少し背を低めに（お好みで） */
+.document.vertical .illustration img{
+  max-width: 90%;
+  max-height: 62vh;
+}
+
+/* 画像が .illustration じゃない場合の保険（絵文字等は除外） */
+.rendered img:not([class*="emoji"]){
+  max-width: 100%;
+  height: auto;
+}
+
+/* スマホ向け微調整 */
+@media (max-width: 600px){
+  .rendered .illustration img{
+    width: 100%;
+    max-height: 60vh;
+    border-radius: 8px;
+  }
+}
+
+</style></head>
 <body><div class="document horizontal"><section class="page" id="page-1" data-index="1">
 <span id="1" class="page-anchor" aria-hidden="true"></span>
-<div class="page-inner"></div>
+<div class="page-inner"><h2 class="chapter">はじめに</h2><p>PixiText の連続スクロール版デモです。<ruby>漢字<rt>かんじ</rt></ruby> にルビを振れます。</p></div>
 </section>
 <section class="page" id="page-2" data-index="2">
 <span id="2" class="page-anchor" aria-hidden="true"></span>
-<div class="page-inner"><div class="blankline" aria-hidden="true"></div><p>その日は平和な日の筈だった。<br>眼の前には先生が居て、ぎこちない作法でお茶を飲んでいる。<br>そんな光景が美しく、暖かさを齎してくれた。<br>時が動くのを憎む程、彼女にとってはこの時間が愛おしかった。</p><div class="blankline" aria-hidden="true"></div><div class="blankline" aria-hidden="true"></div><p>そんな時に、ふと銃についての質問をされた。<br>ナギサは武力を好まないからか、小さい拳銃を机の上に乗せる。</p></div>
+<div class="page-inner"><div class="blankline" aria-hidden="true"></div>
+<div class="blankline" aria-hidden="true"></div>
+<h2 class="chapter">挿絵</h2><figure class="illustration"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAoAAAAFoCAIAAABIUN0GAAAGlElEQVR4nO3cXcqbQABAUb/SdWQxLty19SFURI35k9zSnPMQRJxxzMtFDfm5XC4DAPBZv+oFAMA3EmAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABD4XS9gGIZhmqZ5exzHE+d5eebrwGcXszvqtakA+L+9G+BT2rmN5WunvhXdZ2c+l/QCsPVWgJf3dnPk5o1xHFfl291zPPnBMfNsjxduu7bdZq+uZXnw7tXtfgOri50XubsGd8kA3+aEd8DTNE3TtIzQvL19GDvvOb43vVXHN+0WblnE5Z30ds92Vdvt1aiDx9HLL+1fuFMH4JPeCvAyMAfJXFXtcZ8J0vIS7p5xVVbJBOA1bwV4++D03Eep41+nzHb3RNftVVNvVfn4Sh9pOQDf7Odyubw8+O7Pna5vN7efx6OGxWvR5WHPnn3rkcMOXtbeXfPBqO3O1eNrr4EBvspbAX6N0gDAp/+IY/tjaQD4QsEdMADgrygBICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAEBBgAAgIMAAEBBoCAAANAQIABICDAABAQYAAICDAABAQYAAICDAABAQaAgAADQECAASAgwAAQEGAACAgwAAQEGAACAgwAAQEGgIAAA0BAgAEgIMAAEBBgAAgIMAAE/gB6sAW0l2cPUQAAAABJRU5ErkJggg==" alt="sample.png"></figure></div>
+</section>
+<section class="page" id="page-3" data-index="3">
+<span id="3" class="page-anchor" aria-hidden="true"></span>
+<div class="page-inner"><div class="blankline" aria-hidden="true"></div>
+<div class="blankline" aria-hidden="true"></div>
+<h2 class="chapter">リンク</h2><p>[pixivimage:123456789]<br><a href="https://www.pixiv.net/" target="_blank" rel="noopener noreferrer">pixiv を開く</a></p></div>
+</section>
+<section class="page" id="page-4" data-index="4">
+<span id="4" class="page-anchor" aria-hidden="true"></span>
+<div class="page-inner"><div class="blankline" aria-hidden="true"></div>
+<div class="blankline" aria-hidden="true"></div>
+<h2 class="chapter">ページジャンプ</h2><p>2ページに戻る → <a class="jump" href="#2">2ページへ</a></p></div>
 </section>
 <div class="bottom-pager" role="navigation" aria-label="ページ移動"><div class="pager-center">
 <a class="page-arrow prev" href="#1">&lsaquo;</a>
 <a class="page-number" href="#1" data-page="1">1</a>
 <a class="page-number" href="#2" data-page="2">2</a>
-<a class="page-arrow next" href="#2">&rsaquo;</a>
-</div></div></div><script src="static/app.js"></script></body></html>
+<a class="page-number" href="#3" data-page="3">3</a>
+<a class="page-number" href="#4" data-page="4">4</a>
+<a class="page-arrow next" href="#4">&rsaquo;</a>
+</div></div></div><script>
+// --- 1) BFCache/戻る進む対策を強化（Chrome/Firefox/Safari 全対応） ---
+function refreshCSS() {
+  document.querySelectorAll('link[rel="stylesheet"][href*="style.css"]').forEach(link => {
+    const u = new URL(link.href, location.href);
+    u.searchParams.set('t', Date.now().toString()); // 使い捨てバスター
+    link.href = u.toString();
+  });
+}
+
+window.addEventListener('pageshow', (e) => {
+  // Safari は e.persisted、Chrome/Firefox は Navigation Timing で検出
+  const nav = performance.getEntriesByType('navigation')[0];
+  const isBF = (e.persisted === true) || (nav && nav.type === 'back_forward');
+  if (isBF) refreshCSS();
+});
+
+// --- 2) プレビューのページ番号ハイライト & 位置同期 ---
+(function(){
+  let scheduled = false;
+  function setActiveByCenter(){
+    scheduled = false;
+    const mid = window.innerHeight/2;
+    let best=null, bestDist=Infinity;
+    document.querySelectorAll('.page').forEach(sec=>{
+      const r = sec.getBoundingClientRect();
+      const d = Math.abs((r.top + r.height/2) - mid);
+      if (d < bestDist){ bestDist=d; best=sec; }
+    });
+    if (best){
+      const idx = String(best.dataset.index);
+      const nums = document.querySelectorAll('.bottom-pager .page-number');
+      if (nums.length) {
+        nums.forEach(a => a.classList.toggle('active', a.dataset.page === idx));
+      }
+      // URL の ?p= を同期（リロードなし）
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('p') !== idx) {
+        url.searchParams.set('p', idx);
+        history.replaceState(null, '', url.toString());
+      }
+    }
+  }
+  function schedule(){ if (!scheduled){ scheduled = true; requestAnimationFrame(setActiveByCenter); } }
+
+  function gotoByHashOrQuery(){
+    const h = location.hash;
+    let m = h.match(/^#(\d+)$/) || h.match(/^#page-(\d+)$/);
+    let target = null;
+    if (m) target = m[1];
+    else {
+      const url = new URL(window.location.href);
+      const p = url.searchParams.get('p');
+      if (p) target = p;
+    }
+    if (target){
+      const el = document.getElementById('page-' + target) || document.getElementById(target);
+      if (el){
+        // behavior: 'instant' は仕様外。確実に即時スクロール。
+        el.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }
+    }
+  }
+
+  window.addEventListener('scroll', schedule, { passive:true });
+  window.addEventListener('hashchange', gotoByHashOrQuery);
+  document.addEventListener('DOMContentLoaded', () => { setActiveByCenter(); gotoByHashOrQuery(); });
+})();
+
+// --- 3) タグ挿入（そのままでOK） ---
+(function(){
+  function insertAtCursor(el, text){
+    const [start, end] = [el.selectionStart, el.selectionEnd];
+    const before = el.value.slice(0, start);
+    const after  = el.value.slice(end);
+    el.value = before + text + after;
+    const pos = start + text.length;
+    el.selectionStart = el.selectionEnd = pos;
+    el.focus();
+  }
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('button.ins');
+    if (!btn) return;
+    const ta = document.getElementById('text');
+    if (!ta) return;
+    insertAtCursor(ta, btn.dataset.insert);
+  });
+})();
+
+</script></body></html>

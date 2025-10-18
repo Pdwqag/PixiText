@@ -1,6 +1,7 @@
 print(">> parser loaded:", __file__)
 
-import re, os, json
+import re, os, json, base64, mimetypes
+from typing import Optional
 from html import escape
 from urllib.parse import quote
 
@@ -168,7 +169,69 @@ def text_to_paragraphs(text: str) -> str:
 
 
 # ---------- HTML出力 ----------
-def to_html_document(pages, writing_mode: str = "horizontal", include_boilerplate: bool = False) -> str:
+def _encode_file_to_data_uri(path: str) -> Optional[str]:
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        return None
+    mime, _ = mimetypes.guess_type(path)
+    if not mime:
+        mime = "application/octet-stream"
+    b64 = base64.b64encode(data).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
+def _inline_export_assets(html_doc: str) -> str:
+    css_path = os.path.join(BASE_DIR, "static", "style.css")
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+        html_doc = html_doc.replace(
+            '<link rel="stylesheet" href="static/style.css">',
+            f"<style>\n{css}\n</style>",
+        )
+
+    js_path = os.path.join(BASE_DIR, "static", "app.js")
+    if os.path.exists(js_path):
+        with open(js_path, "r", encoding="utf-8") as f:
+            js = f.read()
+        html_doc = html_doc.replace(
+            '<script src="static/app.js"></script>',
+            f"<script>\n{js}\n</script>",
+        )
+
+    image_sources = set(re.findall(r'<img[^>]+src="([^"]+)"', html_doc))
+    if image_sources:
+        db = _load_upload_db()
+        for src in image_sources:
+            path = None
+            if src.startswith("/uploads/"):
+                path = os.path.join(BASE_DIR, src.lstrip("/"))
+            elif src.startswith("/image/"):
+                token = src.split("/", 2)[-1]
+                rec = db.get(token)
+                if rec:
+                    stored = rec.get("stored_name")
+                    if stored:
+                        path = os.path.join(UPLOAD_DIR, stored)
+
+            if not path or not os.path.exists(path):
+                continue
+
+            data_uri = _encode_file_to_data_uri(path)
+            if data_uri:
+                html_doc = html_doc.replace(f'src="{src}"', f'src="{data_uri}"')
+
+    return html_doc
+
+
+def to_html_document(
+    pages,
+    writing_mode: str = "horizontal",
+    include_boilerplate: bool = False,
+    inline_assets: bool = False,
+) -> str:
     body = []
     total = len(pages)
     for p in pages:
@@ -189,9 +252,15 @@ def to_html_document(pages, writing_mode: str = "horizontal", include_boilerplat
     wrapper = f'<div class="document {"vertical" if writing_mode=="vertical" else "horizontal"}">{content}</div>'
 
     if include_boilerplate:
-        return f'''<!doctype html>
-<html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PixiText Export</title><link rel="stylesheet" href="static/style.css"></head>
-<body>{wrapper}<script src="static/app.js"></script></body></html>'''
+        html = (
+            "<!doctype html>\n"
+            "<html lang=\"ja\">\n"
+            "<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            "<title>PixiText Export</title><link rel=\"stylesheet\" href=\"static/style.css\"></head>\n"
+            f"<body>{wrapper}<script src=\"static/app.js\"></script></body></html>"
+        )
+        if inline_assets:
+            html = _inline_export_assets(html)
+        return html
 
     return wrapper
