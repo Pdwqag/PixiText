@@ -301,7 +301,7 @@ def save_local():
             f.write(text)
         session["last_text"] = text
         session["last_filename"] = name
-        return jsonify(success=True, message=f"「{name}」を保存しました")
+        return jsonify(success=True, message=f"「{name}」を保存しました", filename=name)
     except Exception as e:
         return jsonify(success=False, message=f"保存に失敗：{e}"), 500
 

@@ -115,34 +115,6 @@
   {% endif %}
 </section>
 
-<!-- （画像ギャラリーの）最後の </section> のすぐ後に追加 -->
-<script>
-(() => {
-  // 二重バインド防止
-  const btn = document.querySelector('[data-ajax-save]');
-  if (!btn || btn.dataset.bound === '1') return;
-  btn.dataset.bound = '1';
-
-  btn.addEventListener('click', async () => {
-    const action = btn.dataset.action;                 // 例: "/save_local"
-    const textEl = document.getElementById('text');    // 本文テキストエリア
-    const nameEl = document.querySelector('input[name="filename"]'); // ファイル名入力
-
-    const fd = new FormData();
-    fd.append('text', textEl?.value ?? '');
-    fd.append('filename', (nameEl?.value || '').trim());  // ← 必ず送る
-
-    try {
-      const r = await fetch(action, { method: 'POST', body: fd });
-      const res = await r.json().catch(() => ({}));
-      // 好きなUIに置き換えてOK（トースト等）
-      alert(res.message || (res.success ? '保存しました' : '保存に失敗しました'));
-    } catch (e) {
-      alert('保存に失敗しました: ' + e);
-    }
-  });
-})();
-</script>
 <script>
 (() => {
   const textEl = document.getElementById('text');
@@ -183,16 +155,14 @@
   });
 
   // 5) ついでに「保存成功」時に下書きを“正”として固定（任意）
-  const origAlert = window.alert;
-  window.alert = function(msg){
-    try{
-      if (typeof msg === 'string' && msg.includes('保存しました')) {
-        // 保存後の本文を現キーに確定
-        localStorage.setItem(draftKey(), textEl.value);
+  document.addEventListener('pixi:saved', (ev) => {
+    try {
+      if (ev?.detail?.filename && nameEl) {
+        nameEl.value = ev.detail.filename;
       }
-    }catch(e){}
-    return origAlert.apply(this, arguments);
-  };
+      saveDraft();
+    } catch (e) { /* ignore */ }
+  });
 })();
 </script>
 
