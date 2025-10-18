@@ -338,6 +338,12 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   text-align: center;
 }
 
+.rendered .pixiv-illustration,
+.document .pixiv-illustration{
+  margin: 18px auto;
+  text-align: center;
+}
+
 /* 画像サイズの標準化（横書き想定） */
 .rendered .illustration img,
 .document .illustration img{
@@ -349,6 +355,22 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   border-radius: 10px;
   box-shadow: 0 12px 36px rgba(0,0,0,.35);
   margin-inline: auto;
+}
+
+.rendered .pixiv-illustration iframe,
+.document .pixiv-illustration iframe{
+  width: min(100%, 680px);
+  height: min(540px, 70vh);
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35);
+}
+
+.pixiv-illustration figcaption{
+  margin-top: 8px;
+  font-size: .9rem;
+  color: #8fa4c5;
 }
 
 /* 縦書きページでは少し背を低めに（お好みで） */

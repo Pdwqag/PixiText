@@ -54,6 +54,17 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
         return f"/image/{token}", token
     return f"/uploads/{quote(token)}", token
 
+
+def _render_pixiv_embed(pid: str) -> str:
+    link = f"https://www.pixiv.net/artworks/{pid}"
+    return (
+        '<figure class="pixiv-illustration">'
+        f'<iframe class="pixiv-embed" src="https://embed.pixiv.net/embed.php?illust_id={pid}&lang=ja"'
+        f' loading="lazy" allowfullscreen frameborder="0" scrolling="no" title="pixiv作品 {pid}"></iframe>'
+        f'<figcaption><a href="{link}" target="_blank" rel="noopener noreferrer">pixiv作品 {pid} を開く</a></figcaption>'
+        '</figure>'
+    )
+
 # ---------- インライン ----------
 def render_inline(text: str) -> str:
     def rb_sub(m): return f'<ruby>{m.group(1)}<rt>{m.group(2)}</rt></ruby>'
@@ -110,12 +121,19 @@ def render_block(block: str, page_index: int) -> str:
                 )
             else:
                 out_parts.append(f'<figure class="illustration"><img src="{src}" alt="{escape(alt)}"></figure>')
+            continue
+
+        m = RE_PIXIV.match(line.strip())
+        if m:
+            flush_buf()
+            out_parts.append(_render_pixiv_embed(m.group(1)))
+            continue
+
+        if line == "":
+            flush_buf()
+            out_parts.append('<div class="blankline" aria-hidden="true"></div>')
         else:
-            if line == "":
-                flush_buf()
-                out_parts.append('<div class="blankline" aria-hidden="true"></div>')
-            else:
-                buf.append(line)
+            buf.append(line)
 
     flush_buf()
     if out_parts:
@@ -124,10 +142,7 @@ def render_block(block: str, page_index: int) -> str:
     # --- （ここから下は章でも画像でもなかった時のフォールバック達） ---
     m = RE_PIXIV.match(s)
     if m:
-        pid = m.group(1)
-        link = f'https://www.pixiv.net/artworks/{pid}'
-        return (f'<figure class="pixiv-illustration"><a href="{link}" target="_blank" rel="noopener noreferrer">'
-                f'pixiv作品 {pid} を開く</a><figcaption>pixiv作品ID: {pid}</figcaption></figure>')
+        return _render_pixiv_embed(m.group(1))
 
     m = RE_JUMP_BLK.match(s)
     if m:
