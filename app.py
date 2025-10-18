@@ -7,24 +7,41 @@ from parser import parse_document, to_html_document
 from datetime import datetime
 from flask_session import Session
 
-BASE_DIR     = os.path.dirname(__file__)
-TEMPLATES_DIR= os.path.join(BASE_DIR, "templates")
-STATIC_DIR   = os.path.join(BASE_DIR, "static")
-UPLOAD_DIR   = os.path.join(BASE_DIR, "uploads")
-DB_PATH      = os.path.join(UPLOAD_DIR, "uploads.json")
-SAVES_DIR = os.path.join(BASE_DIR, "saves")
+BASE_DIR      = os.path.dirname(__file__)
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+STATIC_DIR    = os.path.join(BASE_DIR, "static")
+UPLOAD_DIR    = os.path.join(BASE_DIR, "uploads")
+SAVES_DIR     = os.path.join(BASE_DIR, "saves")
+SESSION_DIR   = os.path.join(BASE_DIR, "flask_session")
+DB_PATH       = os.path.join(UPLOAD_DIR, "uploads.json")
+
+# 必要なディレクトリは必ず作成
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(SAVES_DIR, exist_ok=True)
+os.makedirs(SAVES_DIR,  exist_ok=True)
+os.makedirs(SESSION_DIR, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 
-app = Flask(__name__, static_url_path="/static", static_folder=STATIC_DIR, template_folder=TEMPLATES_DIR)
-app.config["UPLOAD_FOLDER"] = UPLOAD_DIR
-app.secret_key = "change-me"
-app.config['SESSION_TYPE'] = 'filesystem'  # ← cookieではなくサーバー保存に変更
-app.config['SESSION_FILE_DIR'] = os.path.join(BASE_DIR, "flask_session")  # 保存場所
-app.config['SESSION_PERMANENT'] = False
-app.config["BUILD_VER"] = 23
+# 1) まずアプリ生成
+app = Flask(
+    __name__,
+    static_url_path="/static",
+    static_folder=STATIC_DIR,
+    template_folder=TEMPLATES_DIR
+)
+
+# 2) 設定をまとめて投入（重複を避ける）
+app.config.update(
+    SECRET_KEY=os.getenv("SECRET_KEY", "change-me"),  # Renderなら環境変数で上書き
+    UPLOAD_FOLDER=UPLOAD_DIR,
+    SESSION_TYPE="filesystem",
+    SESSION_FILE_DIR=SESSION_DIR,
+    SESSION_PERMANENT=False,
+    BUILD_VER=23,   # キャッシュバスター
+)
+
+# 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
+Session(app)
 
 @app.after_request
 def _no_cache_static_css(resp):
