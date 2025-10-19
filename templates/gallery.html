@@ -38,5 +38,15 @@
   {% else %}
     <p class="empty-hint">まだ画像がありません。エディタからアップロードしてください。</p>
   {% endif %}
+
+  <div class="panel-divider"></div>
+  <section class="cloud-note cloud-note--accent" aria-label="Sync.com 連携ガイド">
+    <p><strong>Sync.com で画像を管理するには</strong></p>
+    <ol>
+      <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、<code>uploads</code> フォルダを作成して共有リンクを取得します。</li>
+      <li>ここでダウンロードした画像ファイルをそのフォルダへアップロードし、バックアップを最新状態に保ちます。</li>
+      <li>（任意）<a href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>して Sync.com にアップロードすると、クラウド側でもファイル一覧を確認しやすくなります。</li>
+    </ol>
+  </section>
 </section>
 {% endblock %}

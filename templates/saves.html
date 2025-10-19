@@ -47,5 +47,15 @@
   {% else %}
     <p class="empty-hint">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
   {% endif %}
+
+  <div class="panel-divider"></div>
+  <section class="cloud-note cloud-note--accent" aria-label="Sync.com 保存ガイド">
+    <p><strong>Sync.com に保存ファイルを集約するには</strong></p>
+    <ol>
+      <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> で <code>saves</code> フォルダを作成し、共有リンクを準備します。</li>
+      <li>ここで書き出したテキスト（例：<code>.txt</code>）を Sync.com の <code>saves</code> フォルダにアップロードしてバックアップを更新します。</li>
+      <li>（任意）<a href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>し、Sync.com にアップロードするとクラウド側で管理台帳として利用できます。</li>
+    </ol>
+  </section>
 </section>
 {% endblock %}

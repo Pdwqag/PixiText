@@ -321,6 +321,55 @@
 </section>
 {% endif %}
 
+{% if cloud_targets %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">クラウドバックアップ</h2>
+      <p class="panel-description">Sync.com へ手動でバックアップするためのガイドです。以下の手順に従って共有フォルダを整備してください。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% for provider in cloud_targets %}
+      {% if provider.uploads_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
+          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。</p>
+          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+
+      {% if provider.saves_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
+          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。</p>
+          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p><strong>Sync.com へバックアップする手順</strong></p>
+      <ol>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、共有用の <code>uploads</code> フォルダと <code>saves</code> フォルダを作成します。</li>
+        <li>ローカルで保管している画像やテキストファイルをそれぞれのフォルダにアップロードします。必要に応じて Sync.com 側で履歴や権限を設定してください。</li>
+        <li>共有リンクを発行し、チームメンバーや別環境から参照できるようにします。リンクはこのパネルのショートカットに登録すると便利です。</li>
+        <li>（任意）このアプリの「ローカルからマニフェストを生成」ボタンで JSON を書き出し、Sync.com にアップロードするとクラウド上で管理台帳として利用できます。</li>
+      </ol>
+      <div class="cloud-manifest__toolbar cloud-manifest__toolbar--inline">
+        <a class="cloud-manifest__download" href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>
+      </div>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
+
 <script>
 (() => {
   const textEl = document.getElementById('text');
