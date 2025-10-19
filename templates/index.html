@@ -138,7 +138,329 @@
   {% else %}
     <p class="empty-hint">まだ画像がありません。上のフォームからアップロードしてください。</p>
   {% endif %}
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p>Sync.com を利用する場合は次の流れで設定してください。</p>
+      <ol>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、<code>uploads</code> と <code>saves</code> の2フォルダを用意します。</li>
+        <li>このアプリから <a href="{{ url_for('sync_manifest_export') }}">マニフェスト JSON</a> をダウンロードし、バックアップ用フォルダにアップロードします。</li>
+        <li>Sync.com 側で JSON ファイルを共有し、その公開リンクを環境変数 <code>SYNC_MANIFEST_URL</code>（または設定ファイル）に登録します。</li>
+      </ol>
+      <p>設定後は上の一覧で Sync.com の最新情報を再読み込みできます。</p>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
 </section>
+{% endif %}
+
+{% if mega_uploads_url or mega_saves_url %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">MEGA バックアップ</h2>
+      <p class="panel-description">ローカル保存に加えて、共有済みの MEGA フォルダからファイルを取得・同期できます。必要なときに素早くアクセスできるよう、ショートカットをまとめました。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% if mega_uploads_url %}
+      <article class="cloud-link-card">
+        <h3 class="cloud-link-card__title">挿絵アップロード</h3>
+        <p class="cloud-link-card__text"><code>uploads/</code> 内の画像ファイルをミラーしています。別デバイスから素材を取り込みたいときにご利用ください。</p>
+        <a class="link-button subtle" href="{{ mega_uploads_url }}" target="_blank" rel="noopener">MEGA で開く</a>
+      </article>
+    {% endif %}
+
+    {% if mega_saves_url %}
+      <article class="cloud-link-card">
+        <h3 class="cloud-link-card__title">テキスト保存</h3>
+        <p class="cloud-link-card__text"><code>saves/</code> にあるテキスト原稿のバックアップです。万一ローカルが失われた場合でも、ここからダウンロードして復旧できます。</p>
+        <a class="link-button subtle" href="{{ mega_saves_url }}" target="_blank" rel="noopener">MEGA で開く</a>
+      </article>
+    {% endif %}
+  </div>
+
+  <p class="cloud-note">リンク先は共有フォルダです。必要に応じてご自身の MEGA アカウントへコピーし、アクセス権管理を行ってください。</p>
+</section>
+{% endif %}
+
+{% if cloud_targets %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">クラウドバックアップ</h2>
+      <p class="panel-description">Sync.com 上の共有フォルダへワンクリックで移動できます。Sync.com マニフェストを設定すると最新のファイル一覧も自動で読み込みます。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% for provider in cloud_targets %}
+      {% if provider.uploads_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
+          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。
+            {% if provider.key == 'sync' and cloud_manifest.uploads %}
+              <span class="cloud-link-card__meta">（登録 {{ cloud_manifest.uploads|length }} 件）</span>
+            {% endif %}
+          </p>
+          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+
+      {% if provider.saves_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
+          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。
+            {% if provider.key == 'sync' and cloud_manifest.saves %}
+              <span class="cloud-link-card__meta">（登録 {{ cloud_manifest.saves|length }} 件）</span>
+            {% endif %}
+          </p>
+          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list and (cloud_manifest.uploads or cloud_manifest.saves) %}
+    <div class="cloud-manifest__toolbar cloud-manifest__toolbar--inline">
+      <a class="cloud-manifest__refresh" href="{{ url_for('index', sync_refresh=1) }}" {% if sync_refreshing %}data-loading="true"{% endif %}>Sync.com 情報を再取得</a>
+      <a class="cloud-manifest__download" href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>
+    </div>
+  {% endif %}
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p><strong>Sync.com 連携の前に用意しておくもの</strong></p>
+      <ul>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com</a> にアクセスできる Sync.com アカウント</li>
+        <li>共有リンクを発行できる <code>uploads</code> と <code>saves</code> の 2 フォルダ（空フォルダで可）</li>
+        <li>このアプリで生成した <code>sync-manifest-*.json</code> を配置するバックアップ用の保存先</li>
+      </ul>
+      <p>準備ができたら次の手順で設定してください。</p>
+      <ol>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、<code>uploads</code> と <code>saves</code> の2フォルダを用意します。</li>
+        <li>このアプリから <a href="{{ url_for('sync_manifest_export') }}">マニフェスト JSON</a> をダウンロードし、バックアップ用フォルダにアップロードします。</li>
+        <li>Sync.com 側で JSON ファイルを共有し、その公開リンクを環境変数 <code>SYNC_MANIFEST_URL</code>（または設定ファイル）に登録します。</li>
+      </ol>
+      <p>設定後は上の一覧で Sync.com の最新情報を再読み込みできます。</p>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
+
+{% if cloud_targets %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">クラウドバックアップ</h2>
+      <p class="panel-description">Sync.com 上の共有フォルダへワンクリックで移動できます。Sync.com マニフェストを設定すると最新のファイル一覧も自動で読み込みます。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% for provider in cloud_targets %}
+      {% if provider.uploads_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
+          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。
+            {% if provider.key == 'sync' and cloud_manifest.uploads %}
+              <span class="cloud-link-card__meta">（登録 {{ cloud_manifest.uploads|length }} 件）</span>
+            {% endif %}
+          </p>
+          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+
+      {% if provider.saves_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
+          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。
+            {% if provider.key == 'sync' and cloud_manifest.saves %}
+              <span class="cloud-link-card__meta">（登録 {{ cloud_manifest.saves|length }} 件）</span>
+            {% endif %}
+          </p>
+          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list and (cloud_manifest.uploads or cloud_manifest.saves) %}
+    <div class="cloud-manifest__toolbar cloud-manifest__toolbar--inline">
+      <a class="cloud-manifest__refresh" href="{{ url_for('index', sync_refresh=1) }}" {% if sync_refreshing %}data-loading="true"{% endif %}>Sync.com 情報を再取得</a>
+      <a class="cloud-manifest__download" href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>
+    </div>
+  {% endif %}
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p><strong>Sync.com 連携の前に用意しておくもの</strong></p>
+      <ul>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com</a> にアクセスできる Sync.com アカウント</li>
+        <li>共有リンクを発行できる <code>uploads</code> と <code>saves</code> の 2 フォルダ（空フォルダで可）</li>
+        <li>このアプリで生成した <code>sync-manifest-*.json</code> を配置するバックアップ用の保存先</li>
+      </ul>
+      <p>準備ができたら次の手順で設定してください。</p>
+      <ol>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、<code>uploads</code> と <code>saves</code> の2フォルダを用意します。</li>
+        <li>このアプリから <a href="{{ url_for('sync_manifest_export') }}">マニフェスト JSON</a> をダウンロードし、バックアップ用フォルダにアップロードします。</li>
+        <li>Sync.com 側で JSON ファイルを共有し、その公開リンクを環境変数 <code>SYNC_MANIFEST_URL</code>（または設定ファイル）に登録します。</li>
+      </ol>
+      <p>設定後は上の一覧で Sync.com の最新情報を再読み込みできます。</p>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
+
+{% if cloud_targets %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">クラウドバックアップ</h2>
+      <p class="panel-description">Sync.com へ手動でバックアップするためのガイドです。以下の手順に従って共有フォルダを整備してください。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% for provider in cloud_targets %}
+      {% if provider.uploads_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
+          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。</p>
+          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+
+      {% if provider.saves_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
+          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。</p>
+          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p><strong>Sync.com へバックアップする手順</strong></p>
+      <ol>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、共有用の <code>uploads</code> フォルダと <code>saves</code> フォルダを作成します。</li>
+        <li>ローカルで保管している画像やテキストファイルをそれぞれのフォルダにアップロードします。必要に応じて Sync.com 側で履歴や権限を設定してください。</li>
+        <li>共有リンクを発行し、チームメンバーや別環境から参照できるようにします。リンクはこのパネルのショートカットに登録すると便利です。</li>
+        <li>（任意）このアプリの「ローカルからマニフェストを生成」ボタンで JSON を書き出し、Sync.com にアップロードするとクラウド上で管理台帳として利用できます。</li>
+      </ol>
+      <div class="cloud-manifest__toolbar cloud-manifest__toolbar--inline">
+        <a class="cloud-manifest__download" href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>
+      </div>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
+
+{% if cloud_targets %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">クラウドバックアップ</h2>
+      <p class="panel-description">Sync.com へ手動でバックアップするためのガイドです。以下の手順に従って共有フォルダを整備してください。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% for provider in cloud_targets %}
+      {% if provider.uploads_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
+          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。</p>
+          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+
+      {% if provider.saves_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
+          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。</p>
+          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p><strong>Sync.com に向けて用意するもの</strong></p>
+      <ul>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にアクセスできる Sync.com アカウント。</li>
+        <li>挿絵を格納するための共有フォルダ <code>uploads</code>。</li>
+        <li>テキスト原稿を格納するための共有フォルダ <code>saves</code>。</li>
+        <li>それぞれのフォルダから取得した共有リンク（このパネルのショートカットに登録すると便利です）。</li>
+      </ul>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
+
+{% if cloud_targets %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">クラウドバックアップ</h2>
+      <p class="panel-description">Sync.com へ手動でバックアップするためのガイドです。以下の手順に従って共有フォルダを整備してください。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% for provider in cloud_targets %}
+      {% if provider.uploads_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
+          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。</p>
+          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+
+      {% if provider.saves_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
+          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。</p>
+          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p><strong>Sync.com に向けて用意するもの</strong></p>
+      <ul>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にアクセスできる Sync.com アカウント。</li>
+        <li>挿絵を格納するための共有フォルダ <code>uploads</code>。</li>
+        <li>テキスト原稿を格納するための共有フォルダ <code>saves</code>。</li>
+        <li>それぞれのフォルダから取得した共有リンク（このパネルのショートカットに登録すると便利です）。</li>
+      </ul>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
 
 {% if cloud_targets %}
 <section class="panel panel--cloud" id="cloud-mirror">

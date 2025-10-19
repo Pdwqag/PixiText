@@ -1,10 +1,11 @@
 print(">> app loaded:", __file__)
 
-import os, json, random, time, re
+import os, json, random, time, re, threading
 from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
 from werkzeug.utils import secure_filename
 from parser import parse_document, to_html_document
 from datetime import datetime, timezone
+import requests
 from flask_session import Session
 
 BASE_DIR      = os.path.dirname(__file__)
@@ -37,9 +38,15 @@ app.config.update(
     SESSION_TYPE="filesystem",
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
-    BUILD_VER=24,   # キャッシュバスター
-    SYNC_UPLOADS_URL=os.getenv("SYNC_UPLOADS_URL", "https://cp.sync.com/files"),
-    SYNC_SAVES_URL=os.getenv("SYNC_SAVES_URL", "https://cp.sync.com/files"),
+    BUILD_VER=23,   # キャッシュバスター
+    MEGA_UPLOADS_URL=os.getenv(
+        "MEGA_UPLOADS_URL",
+        "https://mega.nz/folder/OLRGnAKb#wmS6uxo7a3lXRQj7bS-WGg",
+    ),
+    MEGA_SAVES_URL=os.getenv(
+        "MEGA_SAVES_URL",
+        "https://mega.nz/folder/7PoxwB5T#SF_MLltqDChJy9MiuiKVvA",
+    ),
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
@@ -67,34 +74,10 @@ def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWE
 # === テンプレート共通変数 ===
 @app.context_processor
 def inject_cloud_links():
-    providers = []
-
-    def _provider(key, label, uploads_url, saves_url):
-        if not uploads_url and not saves_url:
-            return None
-        return dict(
-            key=key,
-            label=label,
-            uploads_url=uploads_url or "",
-            saves_url=saves_url or "",
-        )
-
-    sync = _provider(
-        "sync",
-        "Sync.com",
-        app.config.get("SYNC_UPLOADS_URL"),
-        app.config.get("SYNC_SAVES_URL"),
-    )
-    for entry in (sync,):
-        if entry:
-            providers.append(entry)
-
     return dict(
-        sync_uploads_url=app.config.get("SYNC_UPLOADS_URL"),
-        sync_saves_url=app.config.get("SYNC_SAVES_URL"),
-        cloud_targets=providers,
+        mega_uploads_url=app.config.get("MEGA_UPLOADS_URL"),
+        mega_saves_url=app.config.get("MEGA_SAVES_URL"),
     )
-
 
 # --- 簡易DB ---
 def _load_db():
@@ -135,9 +118,13 @@ def gallery():
     # 新しい順に並べ替え（簡易）
     items = [{"id": k, **v} for k,v in db.items()]
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
+    refresh = request.args.get("sync_refresh") == "1"
+    sync_manifest = get_sync_manifest(force_refresh=refresh)
     return render_template(
         "gallery.html",
         items=items,
+        sync_uploads=sync_manifest.get("uploads", []),
+        sync_refreshing=refresh,
     )
 
 @app.route("/", methods=["GET","POST"])
@@ -159,12 +146,17 @@ def index():
     gallery_items = [{"id": k, **v} for k, v in db.items()]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
+    refresh = request.args.get("sync_refresh") == "1"
+    cloud_manifest = get_sync_manifest(force_refresh=refresh)
+
     resp = make_response(render_template(
         "index.html",
         default_text=default_text,
         writing_mode=writing_mode,
         gallery_items=gallery_items,
         last_filename=last_filename,
+        cloud_manifest=cloud_manifest,
+        sync_refreshing=refresh,
     ))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
@@ -386,10 +378,25 @@ def saves_list():
     except Exception as e:
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
+    refresh = request.args.get("sync_refresh") == "1"
+    sync_manifest = get_sync_manifest(force_refresh=refresh)
     return render_template(
         "saves.html",
         files=files,
+        sync_saves=sync_manifest.get("saves", []),
+        sync_refreshing=refresh,
     )
+
+
+@app.route("/saves/download/<path:fname>")
+def saves_download(fname):
+    fname = os.path.basename(fname)
+    if not fname.lower().endswith(".txt"):
+        abort(404)
+    path = os.path.join(SAVES_DIR, fname)
+    if not os.path.exists(path) or not os.path.isfile(path):
+        abort(404)
+    return send_from_directory(SAVES_DIR, fname, as_attachment=True, download_name=fname)
 
 
 @app.route("/saves/auto_open")
