@@ -1,10 +1,12 @@
 print(">> app loaded:", __file__)
 
-import os, json, random, time, re
+import os, json, random, time, re, threading
 from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
 from werkzeug.utils import secure_filename
 from parser import parse_document, to_html_document
-from datetime import datetime
+from datetime import datetime, timezone
+import urllib.request
+import urllib.error
 from flask_session import Session
 
 BASE_DIR      = os.path.dirname(__file__)
@@ -37,7 +39,12 @@ app.config.update(
     SESSION_TYPE="filesystem",
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
-    BUILD_VER=23,   # キャッシュバスター
+    BUILD_VER=24,   # キャッシュバスター
+    SYNC_UPLOADS_URL=os.getenv("SYNC_UPLOADS_URL", "https://cp.sync.com/files"),
+    SYNC_SAVES_URL=os.getenv("SYNC_SAVES_URL", "https://cp.sync.com/files"),
+    SYNC_MANIFEST_URL=os.getenv("SYNC_MANIFEST_URL", ""),
+    SYNC_MANIFEST_TTL=int(os.getenv("SYNC_MANIFEST_TTL", "180")),
+    SYNC_MANIFEST_TIMEOUT=float(os.getenv("SYNC_MANIFEST_TIMEOUT", "6")),
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
@@ -62,6 +69,272 @@ Session(app)
 
 def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
 
+# === テンプレート共通変数 ===
+@app.context_processor
+def inject_cloud_links():
+    providers = []
+
+    def _provider(key, label, uploads_url, saves_url):
+        if not uploads_url and not saves_url:
+            return None
+        return dict(
+            key=key,
+            label=label,
+            uploads_url=uploads_url or "",
+            saves_url=saves_url or "",
+        )
+
+    sync = _provider(
+        "sync",
+        "Sync.com",
+        app.config.get("SYNC_UPLOADS_URL"),
+        app.config.get("SYNC_SAVES_URL"),
+    )
+    for entry in (sync,):
+        if entry:
+            providers.append(entry)
+
+    return dict(
+        sync_uploads_url=app.config.get("SYNC_UPLOADS_URL"),
+        sync_saves_url=app.config.get("SYNC_SAVES_URL"),
+        cloud_targets=providers,
+    )
+
+
+_sync_cache = {"ts": 0.0, "data": {"uploads": [], "saves": []}}
+_sync_cache_lock = threading.Lock()
+
+
+def _human_size(num):
+    if num is None:
+        return None
+    try:
+        num = float(num)
+    except Exception:
+        return None
+    units = ["B", "KB", "MB", "GB", "TB"]
+    idx = 0
+    while num >= 1024 and idx < len(units) - 1:
+        num /= 1024
+        idx += 1
+    return f"{num:.1f}{units[idx]}"
+
+
+def _format_sync_timestamp(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value)).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return str(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            iso = text.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(iso)
+            if dt.tzinfo:
+                dt = dt.astimezone(timezone.utc).astimezone()
+            return dt.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return text
+    return None
+
+
+def _normalize_sync_items(items, fallback_category):
+    normalized = []
+    if not items:
+        return normalized
+
+    iterable = []
+    if isinstance(items, dict):
+        for key, value in items.items():
+            if isinstance(value, dict):
+                entry = value.copy()
+                entry.setdefault("name", key)
+            else:
+                entry = {"name": key, "url": value}
+            iterable.append(entry)
+    elif isinstance(items, list):
+        for value in items:
+            if isinstance(value, dict):
+                iterable.append(value)
+            else:
+                iterable.append({"name": value})
+    else:
+        return normalized
+
+    for entry in iterable:
+        name = (
+            entry.get("name")
+            or entry.get("title")
+            or entry.get("filename")
+            or entry.get("id")
+            or "item"
+        )
+        url = entry.get("url") or entry.get("link") or entry.get("href")
+        size = entry.get("size") or entry.get("bytes") or entry.get("length")
+        updated = (
+            entry.get("updated")
+            or entry.get("modified")
+            or entry.get("mtime")
+            or entry.get("timestamp")
+        )
+        try:
+            size_int = int(size)
+        except Exception:
+            try:
+                size_int = int(float(size)) if size is not None else None
+            except Exception:
+                size_int = None
+        normalized.append(
+            dict(
+                name=str(name),
+                url=url,
+                size=size_int,
+                size_label=_human_size(size_int) if size_int is not None else (str(size) if size else None),
+                updated=_format_sync_timestamp(updated),
+                category=fallback_category,
+            )
+        )
+    return normalized
+
+
+def _normalize_sync_payload(payload):
+    uploads = []
+    saves = []
+    if isinstance(payload, dict):
+        uploads = _normalize_sync_items(
+            payload.get("uploads")
+            or payload.get("images")
+            or payload.get("gallery")
+            or payload.get("illustrations"),
+            "uploads",
+        )
+        saves = _normalize_sync_items(
+            payload.get("saves")
+            or payload.get("texts")
+            or payload.get("documents")
+            or payload.get("stories"),
+            "saves",
+        )
+    elif isinstance(payload, list):
+        uploads = _normalize_sync_items(payload, "uploads")
+    return {"uploads": uploads, "saves": saves}
+
+
+def get_sync_manifest(force_refresh=False):
+    url = app.config.get("SYNC_MANIFEST_URL")
+    if not url:
+        return {"uploads": [], "saves": []}
+
+    ttl = max(0, int(app.config.get("SYNC_MANIFEST_TTL", 180)))
+    timeout = max(1.0, float(app.config.get("SYNC_MANIFEST_TIMEOUT", 6)))
+    now = time.time()
+
+    with _sync_cache_lock:
+        if (
+            not force_refresh
+            and _sync_cache["ts"] > 0
+            and now - _sync_cache["ts"] < ttl
+        ):
+            return _sync_cache["data"]
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "PixiTextSync/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+        if not raw:
+            payload = {}
+        else:
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+            except UnicodeDecodeError:
+                payload = json.loads(raw.decode("utf-8", errors="ignore"))
+        data = _normalize_sync_payload(payload)
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, ValueError) as exc:
+        app.logger.warning("Sync manifest fetch failed: %s", exc)
+        data = {"uploads": [], "saves": []}
+
+    with _sync_cache_lock:
+        _sync_cache["ts"] = now
+        _sync_cache["data"] = data
+    return data
+
+
+def _stat_path(path):
+    if not path:
+        return None
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return {"size": st.st_size, "mtime": st.st_mtime}
+
+
+def _iso_timestamp(ts):
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromtimestamp(float(ts), timezone.utc).astimezone()
+        return dt.replace(microsecond=0).isoformat()
+    except Exception:
+        return None
+
+
+def build_local_sync_manifest():
+    uploads = []
+    db = _load_db()
+    for img_id, rec in sorted(db.items(), key=lambda x: x[1].get("ts", 0), reverse=True):
+        stored = rec.get("stored_name")
+        path = os.path.join(app.config["UPLOAD_FOLDER"], stored) if stored else None
+        meta = _stat_path(path)
+        uploads.append(
+            {
+                "id": img_id,
+                "name": rec.get("original_name") or stored or img_id,
+                "stored_name": stored,
+                "url": f"/image/{img_id}",
+                "size": meta["size"] if meta else None,
+                "size_label": _human_size(meta["size"]) if meta else None,
+                "updated": _iso_timestamp(meta["mtime"]) if meta else None,
+                "shortcode": f"[uploadedimage:{img_id}]",
+            }
+        )
+
+    saves = []
+    if os.path.isdir(SAVES_DIR):
+        for name in sorted(os.listdir(SAVES_DIR)):
+            path = os.path.join(SAVES_DIR, name)
+            if not os.path.isfile(path):
+                continue
+            meta = _stat_path(path)
+            saves.append(
+                {
+                    "name": name,
+                    "url": f"/saves/download/{name}",
+                    "size": meta["size"] if meta else None,
+                    "size_label": _human_size(meta["size"]) if meta else None,
+                    "updated": _iso_timestamp(meta["mtime"]) if meta else None,
+                }
+            )
+
+    return {"uploads": uploads, "saves": saves}
+
+
+@app.route("/sync/manifest.json")
+def sync_manifest_export():
+    data = build_local_sync_manifest()
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    resp = make_response(payload)
+    resp.headers["Content-Type"] = "application/json; charset=utf-8"
+    resp.headers["Content-Disposition"] = f"attachment; filename=sync-manifest-{ts}.json"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
 # --- 簡易DB ---
 def _load_db():
     if not os.path.exists(DB_PATH): return {}
@@ -72,14 +345,14 @@ def _save_db(db):
 
 def _gen_id(db):
     while True:
-        nid = f"{random.randint(10000,99999)}"
+        nid = f"{random.randint(100000,999999)}"
         if nid not in db: return nid
 
 @app.route("/uploads/<path:filename>")
 def uploaded(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
-# IDで解決する画像URL: /image/12345
+# IDで解決する画像URL: /image/123456
 @app.route("/image/<img_id>")
 def image_by_id(img_id):
     db = _load_db()
@@ -101,7 +374,14 @@ def gallery():
     # 新しい順に並べ替え（簡易）
     items = [{"id": k, **v} for k,v in db.items()]
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    return render_template("gallery.html", items=items)
+    refresh = request.args.get("sync_refresh") == "1"
+    sync_manifest = get_sync_manifest(force_refresh=refresh)
+    return render_template(
+        "gallery.html",
+        items=items,
+        sync_uploads=sync_manifest.get("uploads", []),
+        sync_refreshing=refresh,
+    )
 
 @app.route("/", methods=["GET","POST"])
 def index():
@@ -122,12 +402,17 @@ def index():
     gallery_items = [{"id": k, **v} for k, v in db.items()]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
+    refresh = request.args.get("sync_refresh") == "1"
+    cloud_manifest = get_sync_manifest(force_refresh=refresh)
+
     resp = make_response(render_template(
         "index.html",
         default_text=default_text,
         writing_mode=writing_mode,
         gallery_items=gallery_items,
         last_filename=last_filename,
+        cloud_manifest=cloud_manifest,
+        sync_refreshing=refresh,
     ))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
@@ -349,7 +634,26 @@ def saves_list():
     except Exception as e:
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
-    return render_template("saves.html", files=files)
+    refresh = request.args.get("sync_refresh") == "1"
+    sync_manifest = get_sync_manifest(force_refresh=refresh)
+    return render_template(
+        "saves.html",
+        files=files,
+        sync_saves=sync_manifest.get("saves", []),
+        sync_refreshing=refresh,
+    )
+
+
+@app.route("/saves/download/<path:fname>")
+def saves_download(fname):
+    fname = os.path.basename(fname)
+    if not fname.lower().endswith(".txt"):
+        abort(404)
+    path = os.path.join(SAVES_DIR, fname)
+    if not os.path.exists(path) or not os.path.isfile(path):
+        abort(404)
+    return send_from_directory(SAVES_DIR, fname, as_attachment=True, download_name=fname)
+
 
 @app.route("/saves/auto_open")
 def saves_auto_open():
