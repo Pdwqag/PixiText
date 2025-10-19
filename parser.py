@@ -59,31 +59,58 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
 def _render_pixiv_embed(pid: str, page: Optional[int] = None) -> str:
     """Return the markup used for `[pixivimage:*]` tokens.
 
-    The figure reuses the standard `.illustration` class so uploaded images and
-    Pixiv illustrations share the same sizing.  The `<img>` itself points at
-    `/pixiv/artworks/...`, which proxies the request and adds the mandatory
-    Referer header for Pixiv's CDN.
+    The wrapper `<div class="pixiv-embed-container">` and the overlay link are
+    required so the illustration fills the iframe while still letting users
+    click the embed to open the original Pixiv page.  These hooks are styled in
+    `static/style.css` and copied into `export.html`; dropping them during
+    conflict resolution will break the preview/export behaviour.
+
+    When a page number greater than 1 is supplied (e.g. `[pixivimage:12345@2]`)
+    we cannot use Pixiv's iframe – it always renders the first page.  In that
+    case the markup switches to an `<img>` that points at our proxy endpoint,
+    which injects the required headers when downloading the original file.
     """
 
-    page = page or 1
+    page = (page or 1)
     if page < 1:
         page = 1
 
-    page_index = page - 1
-    image_src = f"/pixiv/artworks/{pid}"
-    if page_index:
-        image_src += f"/{page_index}"
+    base_link = f"https://www.pixiv.net/artworks/{pid}"
+    figure_attrs = ["class=\"pixiv-illustration\"", f'data-pixiv-id="{pid}"']
+    if page > 1:
+        figure_attrs.append(f'data-pixiv-page="{page}"')
+    figure_attr_str = " ".join(figure_attrs)
 
-    link_base = f"https://www.pixiv.net/artworks/{pid}"
-    link_href = link_base if page_index == 0 else f"{link_base}?page={page_index}"
-    page_suffix = "" if page == 1 else f"（{page}枚目）"
-    alt = f"pixiv作品 {pid}{page_suffix}"
-    caption = f"pixiv作品 {pid} を開く{page_suffix}"
+    if page > 1:
+        # Pixiv's official iframe cannot render arbitrary pages, so we fall
+        # back to a locally proxied <img>.  Pixiv expects zero-based page
+        # indices in the query parameter.
+        proxy_page = page - 1
+        overlay_href = f"{base_link}?page={proxy_page}"
+        alt = f"pixiv作品 {pid} {page}枚目"
+        caption = f"pixiv作品 {pid} を開く（{page}枚目）"
+        return (
+            f'<figure {figure_attr_str}>'
+            '<div class="pixiv-embed-container pixiv-embed-container--image">'
+            f'<img class="pixiv-embed" src="/pixiv/artworks/{pid}/{proxy_page}"'
+            f' alt="{alt}" loading="lazy" decoding="async">'
+            f'<a class="pixiv-embed-overlay" href="{overlay_href}" target="_blank"'
+            f' rel="noopener noreferrer" aria-label="{caption}"></a>'
+            '</div>'
+            f'<figcaption><a href="{overlay_href}" target="_blank" rel="noopener noreferrer">{caption}</a></figcaption>'
+            '</figure>'
+        )
 
+    caption = f"pixiv作品 {pid} を開く"
     return (
-        '<figure class="illustration pixiv-illustration">'
-        f'<img src="{image_src}" alt="{alt}" loading="lazy" decoding="async">'
-        f'<figcaption><a href="{link_href}" target="_blank" rel="noopener noreferrer">{caption}</a></figcaption>'
+        f'<figure {figure_attr_str}>'
+        '<div class="pixiv-embed-container">'
+        f'<iframe class="pixiv-embed" src="https://embed.pixiv.net/embed.php?illust_id={pid}&lang=ja"'
+        f' loading="lazy" allowfullscreen frameborder="0" scrolling="no" title="pixiv作品 {pid}"></iframe>'
+        f'<a class="pixiv-embed-overlay" href="{base_link}" target="_blank" rel="noopener noreferrer"'
+        f' aria-label="{caption}"></a>'
+        '</div>'
+        f'<figcaption><a href="{base_link}" target="_blank" rel="noopener noreferrer">{caption}</a></figcaption>'
         '</figure>'
     )
 
