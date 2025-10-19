@@ -1,8 +1,11 @@
 print(">> parser loaded:", __file__)
 
-import re, os, json
+import re, os, json, base64, mimetypes
+from typing import Optional
 from html import escape
 from urllib.parse import quote
+
+from pixiv import fetch_pixiv_image, PixivFetchError
 
 # ---------- 正規表現 ----------
 RE_NEWPAGE  = re.compile(r'\[newpage\]')
@@ -52,6 +55,26 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
                 return f"/uploads/{stored}", token
         return f"/image/{token}", token
     return f"/uploads/{quote(token)}", token
+
+
+def _render_pixiv_embed(pid: str) -> str:
+    """Return the markup used for `[pixivimage:*]` tokens.
+
+    The anchor wrapping the `<img>` element is styled in both
+    `static/style.css` and the exported sample so the full illustration is
+    clickable.  Keep the `pixiv-image-link` class in sync when resolving
+    conflicts.
+    """
+
+    link = f"https://www.pixiv.net/artworks/{pid}"
+    image_src = f"/pixiv/artworks/{pid}/0"
+    return (
+        '<figure class="pixiv-illustration">'
+        f'<a class="pixiv-image-link" href="{link}" target="_blank" rel="noopener noreferrer">'
+        f'<img src="{image_src}" alt="pixiv作品 {pid}" loading="lazy"></a>'
+        f'<figcaption><a href="{link}" target="_blank" rel="noopener noreferrer">pixiv作品 {pid} を開く</a></figcaption>'
+        '</figure>'
+    )
 
 # ---------- インライン ----------
 def render_inline(text: str) -> str:
@@ -109,12 +132,19 @@ def render_block(block: str, page_index: int) -> str:
                 )
             else:
                 out_parts.append(f'<figure class="illustration"><img src="{src}" alt="{escape(alt)}"></figure>')
+            continue
+
+        m = RE_PIXIV.match(line.strip())
+        if m:
+            flush_buf()
+            out_parts.append(_render_pixiv_embed(m.group(1)))
+            continue
+
+        if line == "":
+            flush_buf()
+            out_parts.append('<div class="blankline" aria-hidden="true"></div>')
         else:
-            if line == "":
-                flush_buf()
-                out_parts.append('<div class="blankline" aria-hidden="true"></div>')
-            else:
-                buf.append(line)
+            buf.append(line)
 
     flush_buf()
     if out_parts:
@@ -123,10 +153,7 @@ def render_block(block: str, page_index: int) -> str:
     # --- （ここから下は章でも画像でもなかった時のフォールバック達） ---
     m = RE_PIXIV.match(s)
     if m:
-        pid = m.group(1)
-        link = f'https://www.pixiv.net/artworks/{pid}'
-        return (f'<figure class="pixiv-illustration"><a href="{link}" target="_blank" rel="noopener noreferrer">'
-                f'pixiv作品 {pid} を開く</a><figcaption>pixiv作品ID: {pid}</figcaption></figure>')
+        return _render_pixiv_embed(m.group(1))
 
     m = RE_JUMP_BLK.match(s)
     if m:
@@ -168,7 +195,88 @@ def text_to_paragraphs(text: str) -> str:
 
 
 # ---------- HTML出力 ----------
-def to_html_document(pages, writing_mode: str = "horizontal", include_boilerplate: bool = False) -> str:
+def _encode_file_to_data_uri(path: str) -> Optional[str]:
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        return None
+    mime, _ = mimetypes.guess_type(path)
+    if not mime:
+        mime = "application/octet-stream"
+    b64 = base64.b64encode(data).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
+def _inline_export_assets(html_doc: str) -> str:
+    css_path = os.path.join(BASE_DIR, "static", "style.css")
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+        html_doc = html_doc.replace(
+            '<link rel="stylesheet" href="static/style.css">',
+            f"<style>\n{css}\n</style>",
+        )
+
+    js_path = os.path.join(BASE_DIR, "static", "app.js")
+    if os.path.exists(js_path):
+        with open(js_path, "r", encoding="utf-8") as f:
+            js = f.read()
+        html_doc = html_doc.replace(
+            '<script src="static/app.js"></script>',
+            f"<script>\n{js}\n</script>",
+        )
+
+    image_sources = set(re.findall(r'<img[^>]+src="([^"]+)"', html_doc))
+    if image_sources:
+        db = _load_upload_db()
+        pixiv_cache: dict[str, Optional[str]] = {}
+        for src in image_sources:
+            path = None
+            data_uri = None
+            if src.startswith("/uploads/"):
+                path = os.path.join(BASE_DIR, src.lstrip("/"))
+            elif src.startswith("/image/"):
+                token = src.split("/", 2)[-1]
+                rec = db.get(token)
+                if rec:
+                    stored = rec.get("stored_name")
+                    if stored:
+                        path = os.path.join(UPLOAD_DIR, stored)
+            elif src.startswith("/pixiv/artworks/"):
+                if src not in pixiv_cache:
+                    parts = src.strip("/").split("/")
+                    pid = parts[2] if len(parts) >= 3 else parts[-1]
+                    page_index = 0
+                    if len(parts) >= 4:
+                        try:
+                            page_index = int(parts[3])
+                        except ValueError:
+                            page_index = 0
+                    try:
+                        data, mime = fetch_pixiv_image(pid, page_index)
+                    except PixivFetchError:
+                        pixiv_cache[src] = None
+                    else:
+                        b64 = base64.b64encode(data).decode("ascii")
+                        pixiv_cache[src] = f"data:{mime};base64,{b64}"
+                data_uri = pixiv_cache.get(src)
+
+            if path and os.path.exists(path):
+                data_uri = _encode_file_to_data_uri(path)
+
+            if data_uri:
+                html_doc = html_doc.replace(f'src="{src}"', f'src="{data_uri}"')
+
+    return html_doc
+
+
+def to_html_document(
+    pages,
+    writing_mode: str = "horizontal",
+    include_boilerplate: bool = False,
+    inline_assets: bool = False,
+) -> str:
     body = []
     total = len(pages)
     for p in pages:
@@ -189,9 +297,15 @@ def to_html_document(pages, writing_mode: str = "horizontal", include_boilerplat
     wrapper = f'<div class="document {"vertical" if writing_mode=="vertical" else "horizontal"}">{content}</div>'
 
     if include_boilerplate:
-        return f'''<!doctype html>
-<html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PixiText Export</title><link rel="stylesheet" href="static/style.css"></head>
-<body>{wrapper}<script src="static/app.js"></script></body></html>'''
+        html = (
+            "<!doctype html>\n"
+            "<html lang=\"ja\">\n"
+            "<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            "<title>PixiText Export</title><link rel=\"stylesheet\" href=\"static/style.css\"></head>\n"
+            f"<body>{wrapper}<script src=\"static/app.js\"></script></body></html>"
+        )
+        if inline_assets:
+            html = _inline_export_assets(html)
+        return html
 
     return wrapper

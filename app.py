@@ -1,9 +1,10 @@
 print(">> app loaded:", __file__)
 
 import os, json, random, time, re
-from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
 from werkzeug.utils import secure_filename
 from parser import parse_document, to_html_document
+from pixiv import fetch_pixiv_image, PixivFetchError
 from datetime import datetime
 from flask_session import Session
 
@@ -87,6 +88,21 @@ def image_by_id(img_id):
     if not rec: abort(404)
     return send_from_directory(app.config["UPLOAD_FOLDER"], rec["stored_name"])
 
+
+@app.route("/pixiv/artworks/<pid>", defaults={"page": 0})
+@app.route("/pixiv/artworks/<pid>/<int:page>")
+def pixiv_artwork_image(pid, page):
+    try:
+        data, mime = fetch_pixiv_image(pid, page)
+    except PixivFetchError as exc:
+        return (str(exc), 502, {"Content-Type": "text/plain; charset=utf-8"})
+    except Exception:
+        return ("Pixiv画像の取得に失敗しました", 502, {"Content-Type": "text/plain; charset=utf-8"})
+    response = make_response(data)
+    response.headers["Content-Type"] = mime
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
 # ギャラリー（一覧）
 @app.route("/gallery")
 def gallery():
@@ -115,7 +131,6 @@ def index():
     gallery_items = [{"id": k, **v} for k, v in db.items()]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
-    from flask import make_response
     resp = make_response(render_template(
         "index.html",
         default_text=default_text,
@@ -174,7 +189,12 @@ def export():
     writing_mode = request.form.get("writing_mode","horizontal")
     session['last_text'] = text; session['last_writing_mode'] = writing_mode
     pages = parse_document(text)
-    html_doc = to_html_document(pages, writing_mode=writing_mode, include_boilerplate=True)
+    html_doc = to_html_document(
+        pages,
+        writing_mode=writing_mode,
+        include_boilerplate=True,
+        inline_assets=True,
+    )
     out_path = os.path.join(BASE_DIR, "export.html")
     with open(out_path, "w", encoding="utf-8") as f: f.write(html_doc)
     return send_file(out_path, as_attachment=True, download_name="export.html")
@@ -296,7 +316,7 @@ def save_local():
             f.write(text)
         session["last_text"] = text
         session["last_filename"] = name
-        return jsonify(success=True, message=f"「{name}」を保存しました")
+        return jsonify(success=True, message=f"「{name}」を保存しました", filename=name)
     except Exception as e:
         return jsonify(success=False, message=f"保存に失敗：{e}"), 500
 

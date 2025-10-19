@@ -332,13 +332,21 @@ a.jump{ text-decoration:underline; cursor:pointer; }
 /* === Preview / Rendered images =================================== */
 
 /* 囲みブロックのベース */
-.rendered .illustration{
+.rendered .illustration,
+.document .illustration{
   margin: 14px auto;
   text-align: center;
 }
 
+.rendered .pixiv-illustration,
+.document .pixiv-illustration{
+  margin: 18px auto;
+  text-align: center;
+}
+
 /* 画像サイズの標準化（横書き想定） */
-.rendered .illustration img{
+.rendered .illustration img,
+.document .illustration img{
   display: block;
   width: min(100%, 680px);  /* 横幅の上限（好みで 600〜800px くらい） */
   height: auto;
@@ -347,6 +355,33 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   border-radius: 10px;
   box-shadow: 0 12px 36px rgba(0,0,0,.35);
   margin-inline: auto;
+}
+
+.rendered .pixiv-illustration img,
+.document .pixiv-illustration img{
+  display: block;
+  width: min(100%, 680px);
+  height: auto;
+  max-height: 70vh;
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35);
+}
+
+/* Keep pixiv-image-link in sync with parser.py::_render_pixiv_embed and export.html. */
+.pixiv-illustration .pixiv-image-link{
+  display: inline-block;
+  border-radius: 12px;
+}
+
+.pixiv-illustration .pixiv-image-link:focus-visible{
+  outline: 3px solid rgba(119,180,255,.85);
+  outline-offset: 4px;
+}
+
+.pixiv-illustration figcaption{
+  margin-top: 8px;
+  font-size: .9rem;
+  color: #8fa4c5;
 }
 
 /* 縦書きページでは少し背を低めに（お好みで） */
