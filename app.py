@@ -4,7 +4,6 @@ import os, json, random, time, re
 from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
 from werkzeug.utils import secure_filename
 from parser import parse_document, to_html_document
-from pixiv import fetch_pixiv_image, PixivFetchError
 from datetime import datetime
 from flask_session import Session
 
@@ -86,22 +85,14 @@ def image_by_id(img_id):
     db = _load_db()
     rec = db.get(img_id)
     if not rec: abort(404)
-    return send_from_directory(app.config["UPLOAD_FOLDER"], rec["stored_name"])
+    path = os.path.join(app.config["UPLOAD_FOLDER"], rec["stored_name"])
+    if not os.path.exists(path):
+        abort(404)
+    download_name = rec.get("original_name") or rec.get("stored_name")
+    resp = send_file(path, as_attachment=False, download_name=download_name)
+    resp.headers.setdefault("Cache-Control", "public, max-age=86400")
+    return resp
 
-
-@app.route("/pixiv/artworks/<pid>", defaults={"page": 0})
-@app.route("/pixiv/artworks/<pid>/<int:page>")
-def pixiv_artwork_image(pid, page):
-    try:
-        data, mime = fetch_pixiv_image(pid, page)
-    except PixivFetchError as exc:
-        return (str(exc), 502, {"Content-Type": "text/plain; charset=utf-8"})
-    except Exception:
-        return ("Pixiv画像の取得に失敗しました", 502, {"Content-Type": "text/plain; charset=utf-8"})
-    response = make_response(data)
-    response.headers["Content-Type"] = mime
-    response.headers["Cache-Control"] = "public, max-age=86400"
-    return response
 
 # ギャラリー（一覧）
 @app.route("/gallery")
@@ -155,10 +146,27 @@ def upload():
     orig_name = file.filename
     ext = orig_name.rsplit(".",1)[1].lower()
 
-    # 5桁IDを払い出し、ID.拡張子で保存
     db = _load_db()
     nid = _gen_id(db)
-    stored_name = f"{nid}.{ext}"
+    safe_name = secure_filename(orig_name)
+    if not safe_name:
+        safe_name = f"image.{ext}"
+
+    root, current_ext = os.path.splitext(safe_name)
+    if not current_ext:
+        current_ext = f".{ext}"
+    if current_ext.lower() != f".{ext}":
+        root = root or "image"
+        current_ext = f".{ext}"
+
+    root = root or "image"
+    candidate = f"{root}{current_ext}"
+    counter = 1
+    while os.path.exists(os.path.join(app.config["UPLOAD_FOLDER"], candidate)):
+        candidate = f"{root}-{counter}{current_ext}"
+        counter += 1
+
+    stored_name = candidate
     path = os.path.join(app.config["UPLOAD_FOLDER"], stored_name)
     file.save(path)
 

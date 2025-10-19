@@ -47,6 +47,7 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
     db = _load_upload_db()
     if token.isdigit() and 4 <= len(token) <= 8:
         rec = db.get(token)
+        alt_name = token
         if rec:
             stored = rec.get("stored_name", "")
             path = os.path.join(UPLOAD_DIR, stored)
