@@ -138,52 +138,6 @@
   {% else %}
     <p class="empty-hint">まだ画像がありません。上のフォームからアップロードしてください。</p>
   {% endif %}
-</section>
-
-{% if cloud_targets %}
-<section class="panel panel--cloud" id="cloud-mirror">
-  <header class="panel-heading">
-    <div class="panel-heading__text">
-      <span class="panel-kicker">Cloud Mirror</span>
-      <h2 class="panel-title">クラウドバックアップ</h2>
-      <p class="panel-description">Sync.com 上の共有フォルダへワンクリックで移動できます。Sync.com マニフェストを設定すると最新のファイル一覧も自動で読み込みます。</p>
-    </div>
-  </header>
-
-  <div class="cloud-links">
-    {% for provider in cloud_targets %}
-      {% if provider.uploads_url %}
-        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
-          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
-          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。
-            {% if provider.key == 'sync' and cloud_manifest.uploads %}
-              <span class="cloud-link-card__meta">（登録 {{ cloud_manifest.uploads|length }} 件）</span>
-            {% endif %}
-          </p>
-          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
-        </article>
-      {% endif %}
-
-      {% if provider.saves_url %}
-        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
-          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
-          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。
-            {% if provider.key == 'sync' and cloud_manifest.saves %}
-              <span class="cloud-link-card__meta">（登録 {{ cloud_manifest.saves|length }} 件）</span>
-            {% endif %}
-          </p>
-          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
-        </article>
-      {% endif %}
-    {% endfor %}
-  </div>
-
-  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list and (cloud_manifest.uploads or cloud_manifest.saves) %}
-    <div class="cloud-manifest__toolbar cloud-manifest__toolbar--inline">
-      <a class="cloud-manifest__refresh" href="{{ url_for('index', sync_refresh=1) }}" {% if sync_refreshing %}data-loading="true"{% endif %}>Sync.com 情報を再取得</a>
-      <a class="cloud-manifest__download" href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>
-    </div>
-  {% endif %}
 
   {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
     <div class="cloud-note cloud-note--accent">
@@ -198,6 +152,38 @@
   {% endif %}
 
   <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
+
+{% if mega_uploads_url or mega_saves_url %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">MEGA バックアップ</h2>
+      <p class="panel-description">ローカル保存に加えて、共有済みの MEGA フォルダからファイルを取得・同期できます。必要なときに素早くアクセスできるよう、ショートカットをまとめました。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% if mega_uploads_url %}
+      <article class="cloud-link-card">
+        <h3 class="cloud-link-card__title">挿絵アップロード</h3>
+        <p class="cloud-link-card__text"><code>uploads/</code> 内の画像ファイルをミラーしています。別デバイスから素材を取り込みたいときにご利用ください。</p>
+        <a class="link-button subtle" href="{{ mega_uploads_url }}" target="_blank" rel="noopener">MEGA で開く</a>
+      </article>
+    {% endif %}
+
+    {% if mega_saves_url %}
+      <article class="cloud-link-card">
+        <h3 class="cloud-link-card__title">テキスト保存</h3>
+        <p class="cloud-link-card__text"><code>saves/</code> にあるテキスト原稿のバックアップです。万一ローカルが失われた場合でも、ここからダウンロードして復旧できます。</p>
+        <a class="link-button subtle" href="{{ mega_saves_url }}" target="_blank" rel="noopener">MEGA で開く</a>
+      </article>
+    {% endif %}
+  </div>
+
+  <p class="cloud-note">リンク先は共有フォルダです。必要に応じてご自身の MEGA アカウントへコピーし、アクセス権管理を行ってください。</p>
 </section>
 {% endif %}
 
