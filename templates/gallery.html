@@ -1,10 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel gallery-panel">
-  <div class="gallery-header">
-    <h2>アップロード一覧</h2>
-    <a href="{{ url_for('index') }}" class="link-button subtle">←エディタへ戻る</a>
-  </div>
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Gallery</span>
+      <h2 class="panel-title">アップロード一覧</h2>
+      <p class="panel-description">生成されたショートコードは本文からいつでも呼び出せます。不要になったファイルはここで整理しましょう。</p>
+    </div>
+    <div class="panel-actions">
+      <a href="{{ url_for('index') }}" class="link-button subtle">← エディタへ戻る</a>
+    </div>
+  </header>
+
+  {% if cloud_targets %}
+    <div class="cloud-callout-stack">
+      {% for provider in cloud_targets %}
+        {% if provider.uploads_url %}
+          <div class="cloud-callout" role="note">
+            <span class="cloud-callout__badge">{{ provider.label }}</span>
+            <p class="cloud-callout__text">共有フォルダにミラーされた画像バックアップへアクセスできます。<a href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
 
   {% if items %}
     <div class="mg-grid mg-grid-lg">
@@ -30,7 +49,53 @@
       {% endfor %}
     </div>
   {% else %}
-    <p class="empty-hint">まだ画像がありません。</p>
+    <p class="empty-hint">まだ画像がありません。エディタからアップロードしてください。</p>
+  {% endif %}
+
+  {% if sync_uploads %}
+    <div class="panel-divider"></div>
+    <section class="cloud-manifest" aria-label="Sync.com バックアップ一覧">
+      <header class="cloud-manifest__header">
+        <h3 class="cloud-manifest__title">Sync.com バックアップ</h3>
+        <p class="cloud-manifest__description">Sync.com に配置した JSON マニフェストから画像情報を読み込み、最新版を確認できます。ブラウザで直接ファイルを開く場合はリンク列からアクセスしてください。</p>
+        <div class="cloud-manifest__toolbar">
+          <a class="cloud-manifest__refresh" href="{{ url_for('gallery', sync_refresh=1) }}" {% if sync_refreshing %}data-loading="true"{% endif %}>最新情報を再取得</a>
+          <a class="cloud-manifest__download" href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>
+        </div>
+      </header>
+      <div class="cloud-manifest__table-wrapper">
+        <table class="cloud-manifest__table">
+          <thead>
+            <tr>
+              <th scope="col">ファイル名</th>
+              <th scope="col">更新日</th>
+              <th scope="col">サイズ</th>
+              <th scope="col" class="cloud-manifest__actions">リンク</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in sync_uploads %}
+              <tr>
+                <td data-title="ファイル名">{{ item.name }}</td>
+                <td data-title="更新日">{{ item.updated or "-" }}</td>
+                <td data-title="サイズ">{{ item.size_label or "-" }}</td>
+                <td data-title="リンク" class="cloud-manifest__actions">
+                  {% if item.url %}
+                    <a href="{{ item.url }}" target="_blank" rel="noopener">開く</a>
+                  {% else %}
+                    <span class="cloud-manifest__placeholder">なし</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="cloud-note cloud-note--accent">
+        <strong>事前準備：</strong> Sync.com アカウントで <code>uploads</code> フォルダを作成し、共有リンクを発行できる状態にしておいてください。
+        このアプリからダウンロードしたマニフェスト JSON をそのフォルダにアップロードし、公開リンクを <code>SYNC_MANIFEST_URL</code> として登録すると一覧が同期されます。
+      </p>
+    </section>
   {% endif %}
 </section>
 {% endblock %}
