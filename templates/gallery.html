@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel gallery-panel">
-  <div class="gallery-header">
-    <h2>アップロード一覧</h2>
-    <a href="{{ url_for('index') }}" class="link-button subtle">←エディタへ戻る</a>
-  </div>
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Gallery</span>
+      <h2 class="panel-title">アップロード一覧</h2>
+      <p class="panel-description">生成されたショートコードは本文からいつでも呼び出せます。不要になったファイルはここで整理しましょう。</p>
+    </div>
+    <div class="panel-actions">
+      <a href="{{ url_for('index') }}" class="link-button subtle">← エディタへ戻る</a>
+    </div>
+  </header>
 
   {% if items %}
     <div class="mg-grid mg-grid-lg">
@@ -30,7 +36,7 @@
       {% endfor %}
     </div>
   {% else %}
-    <p class="empty-hint">まだ画像がありません。</p>
+    <p class="empty-hint">まだ画像がありません。エディタからアップロードしてください。</p>
   {% endif %}
 </section>
 {% endblock %}

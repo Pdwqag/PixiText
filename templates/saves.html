@@ -1,14 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>保存済みテキスト一覧</h2>
-
-  <p style="margin-bottom:12px;">
-    <a class="back-button" href="{{ url_for('index') }}"><span class="icon">エディタに戻る</span></a>
-  </p>
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Draft Archive</span>
+      <h2 class="panel-title">保存済みテキスト一覧</h2>
+      <p class="panel-description">ローカルディスクに保存されたテキストファイルの一覧です。必要なデータを編集・削除し、執筆フローを整えましょう。</p>
+    </div>
+    <div class="panel-actions">
+      <a class="link-button subtle" href="{{ url_for('index') }}">← エディタに戻る</a>
+    </div>
+  </header>
 
   {% if files %}
-    <div class="mg-grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+    <div class="mg-grid mg-grid-wide">
       {% for f in files %}
         <div class="mg-card">
           <div class="mg-body">
@@ -40,7 +45,7 @@
       {% endfor %}
     </div>
   {% else %}
-    <p style="opacity:.8;">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
+    <p class="empty-hint">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
   {% endif %}
 </section>
 {% endblock %}
