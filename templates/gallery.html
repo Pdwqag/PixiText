@@ -1,10 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel gallery-panel">
-  <div class="gallery-header">
-    <h2>アップロード一覧</h2>
-    <a href="{{ url_for('index') }}" class="link-button subtle">←エディタへ戻る</a>
-  </div>
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Gallery</span>
+      <h2 class="panel-title">アップロード一覧</h2>
+      <p class="panel-description">生成されたショートコードは本文からいつでも呼び出せます。不要になったファイルはここで整理しましょう。</p>
+    </div>
+    <div class="panel-actions">
+      <a href="{{ url_for('index') }}" class="link-button subtle">← エディタへ戻る</a>
+    </div>
+  </header>
+
+  {% if cloud_targets %}
+    <div class="cloud-callout-stack">
+      {% for provider in cloud_targets %}
+        {% if provider.uploads_url %}
+          <div class="cloud-callout" role="note">
+            <span class="cloud-callout__badge">{{ provider.label }}</span>
+            <p class="cloud-callout__text">共有フォルダにミラーされた画像バックアップへアクセスできます。<a href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
 
   {% if items %}
     <div class="mg-grid mg-grid-lg">
@@ -30,7 +49,17 @@
       {% endfor %}
     </div>
   {% else %}
-    <p class="empty-hint">まだ画像がありません。</p>
+    <p class="empty-hint">まだ画像がありません。エディタからアップロードしてください。</p>
   {% endif %}
+
+  <div class="panel-divider"></div>
+  <section class="cloud-note cloud-note--accent" aria-label="Sync.com 連携ガイド">
+    <p><strong>Sync.com で画像を管理するには</strong></p>
+    <ol>
+      <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、<code>uploads</code> フォルダを作成して共有リンクを取得します。</li>
+      <li>ここでダウンロードした画像ファイルをそのフォルダへアップロードし、バックアップを最新状態に保ちます。</li>
+      <li>（任意）<a href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>して Sync.com にアップロードすると、クラウド側でもファイル一覧を確認しやすくなります。</li>
+    </ol>
+  </section>
 </section>
 {% endblock %}
