@@ -5,12 +5,10 @@ from typing import Optional
 from html import escape
 from urllib.parse import quote
 
-from pixiv import fetch_pixiv_image, PixivFetchError
 
 # ---------- 正規表現 ----------
 RE_NEWPAGE  = re.compile(r'\[newpage\]')
 RE_UPLOADED = re.compile(r'^\[uploadedimage:(.*?)\]$')
-RE_PIXIV    = re.compile(r'^\[pixivimage:(\d+)\]$')
 RE_JUMP_BLK = re.compile(r'^\[jump:(\d+)\]$')
 RE_JUMP_INL = re.compile(r'\[jump:(\d+)\]')
 RE_JUMPURI  = re.compile(r'\[\[jumpuri:(.*?)\s*(?:>|&gt;)\s*(.*?)\]\]')
@@ -48,37 +46,18 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
     db = _load_upload_db()
     if token.isdigit() and 4 <= len(token) <= 8:
         rec = db.get(token)
+        alt_name = token
         if rec:
             stored = rec.get("stored_name", "")
-            path = os.path.join(UPLOAD_DIR, stored)
-            if stored and os.path.exists(path):
-                return f"/uploads/{stored}", token
-        return f"/image/{token}", token
-    return f"/uploads/{quote(token)}", token
-
-
-def _render_pixiv_embed(pid: str) -> str:
-    """Return the markup used for `[pixivimage:*]` tokens.
-
-    The wrapper `<div class="pixiv-embed-container">` and the overlay link are
-    required so the illustration fills the iframe while still letting users
-    click the embed to open the original Pixiv page.  These hooks are styled in
-    `static/style.css` and copied into `export.html`; dropping them during
-    conflict resolution will break the preview/export behaviour.
-    """
-
-    link = f"https://www.pixiv.net/artworks/{pid}"
-    return (
-        '<figure class="pixiv-illustration">'
-        '<div class="pixiv-embed-container">'
-        f'<iframe class="pixiv-embed" src="https://embed.pixiv.net/embed.php?illust_id={pid}&lang=ja"'
-        f' loading="lazy" allowfullscreen frameborder="0" scrolling="no" title="pixiv作品 {pid}"></iframe>'
-        f'<a class="pixiv-embed-overlay" href="{link}" target="_blank" rel="noopener noreferrer"'
-        f' aria-label="pixiv作品 {pid} を開く"></a>'
-        '</div>'
-        f'<figcaption><a href="{link}" target="_blank" rel="noopener noreferrer">pixiv作品 {pid} を開く</a></figcaption>'
-        '</figure>'
-    )
+            alt_name = rec.get("original_name") or stored or token
+            if stored:
+                path = os.path.join(UPLOAD_DIR, stored)
+                if os.path.exists(path):
+                    return f"/uploads/{stored}", alt_name
+            return f"/image/{token}", alt_name
+        return f"/image/{token}", alt_name
+    display = os.path.basename(token) or token
+    return f"/uploads/{quote(token)}", display
 
 # ---------- インライン ----------
 def render_inline(text: str) -> str:
@@ -138,12 +117,6 @@ def render_block(block: str, page_index: int) -> str:
                 out_parts.append(f'<figure class="illustration"><img src="{src}" alt="{escape(alt)}"></figure>')
             continue
 
-        m = RE_PIXIV.match(line.strip())
-        if m:
-            flush_buf()
-            out_parts.append(_render_pixiv_embed(m.group(1)))
-            continue
-
         if line == "":
             flush_buf()
             out_parts.append('<div class="blankline" aria-hidden="true"></div>')
@@ -155,10 +128,6 @@ def render_block(block: str, page_index: int) -> str:
         return "".join(out_parts)
 
     # --- （ここから下は章でも画像でもなかった時のフォールバック達） ---
-    m = RE_PIXIV.match(s)
-    if m:
-        return _render_pixiv_embed(m.group(1))
-
     m = RE_JUMP_BLK.match(s)
     if m:
         target = int(m.group(1))

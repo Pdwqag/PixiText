@@ -11,12 +11,10 @@
       {% for it in items %}
         <div class="mg-card">
           <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank" rel="noopener">
-            <span class="mg-badge">ID: {{ it.id }}</span>
             <img src="{{ url_for('image_by_id', img_id=it.id) }}"
                  alt="{{ it.original_name or it.stored_name }}">
           </a>
           <div class="mg-body">
-            <div class="mg-id">#{{ it.id }}</div>
             <div class="mg-name" title="{{ it.original_name or it.stored_name }}">{{ it.original_name or it.stored_name }}</div>
             <div class="mg-actions">
               <input class="mg-code" type="text" readonly value="[uploadedimage:{{ it.id }}]">
