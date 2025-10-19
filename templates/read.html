@@ -2,7 +2,13 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>単ページビュー</h2>
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Reader</span>
+      <h2 class="panel-title">単ページビュー</h2>
+      <p class="panel-description">ページ送りで作品全体を確認できます。</p>
+    </div>
+  </header>
   <div class="rendered">
     <div class="document {{ writing_mode }}">
       <section class="page single" id="page-{{p}}" data-index="{{p}}">
