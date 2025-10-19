@@ -1,9 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
 
+<!-- ===== ヒーロー / ガイド ===== -->
+<section class="hero-card">
+  <span class="hero-card__badge">Creative Workspace</span>
+  <h2 class="hero-card__title">PixiText Studio</h2>
+  <p class="hero-card__lead">テキストと挿絵をローカル環境でスムーズに扱うためのモダンな制作ツールです。ドラフトの保存からギャラリー管理まで、すべてがワンクリックで完結します。</p>
+  <div class="hero-actions">
+    <a class="link-button primary" href="#editor">エディタを開く</a>
+    <a class="link-button subtle" href="{{ url_for('gallery') }}">ギャラリーを見る</a>
+  </div>
+</section>
+
 <!-- ===== エディタ ===== -->
-<section class="panel">
-  <h2>本文エディタ</h2>
+<section class="panel panel--editor" id="editor">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Writing Toolkit</span>
+      <h2 class="panel-title">本文エディタ</h2>
+      <p class="panel-description">タグショートカットやプレビューを活用しながら、作品原稿を磨き上げましょう。入力内容はブラウザ内に自動保存されます。</p>
+    </div>
+  </header>
 
   <!-- プレビュー/保存 兼用フォーム（保存は formaction で切替） -->
   <form method="post" action="{{ url_for('preview') }}" novalidate>
@@ -12,7 +29,7 @@
     <div class="shortcut-bar">
       <button type="button" class="ins" data-insert="[newpage]">[newpage]</button>
       <button type="button" class="ins" data-insert="[chapter:章タイトル]">[chapter]</button>
-      <button type="button" class="ins" data-insert="[uploadedimage:12345]">[uploadedimage]</button>
+      <button type="button" class="ins" data-insert="[uploadedimage:123456]">[uploadedimage]</button>
       <button type="button" class="ins" data-insert="[jump:2]">[jump]</button>
       <button type="button" class="ins" data-insert="[[jumpuri:タイトル > https://example.com]]">[[jumpuri]]</button>
       <button type="button" class="ins" data-insert="[[rb:漢字 > かんじ]]">[[rb]]</button>
@@ -48,7 +65,7 @@
         class="primary"
         data-ajax-save
         data-action="{{ url_for('save_local') }}"
-      >クラウドに保存</button>
+      >ローカルに保存</button>
 
       <button
         type="submit"
@@ -62,7 +79,13 @@
 
 <!-- ===== 画像アップロード ===== -->
 <section class="panel">
-  <h3>画像アップロード（挿絵）</h3>
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Illustration Assets</span>
+      <h2 class="panel-title">画像アップロード（挿絵）</h2>
+      <p class="panel-description">アップロード済みの画像はショートコードとして呼び出せます。必要に応じてギャラリーから整理・削除してください。</p>
+    </div>
+  </header>
 
   <!-- base.html 側の “未選択トースト” と style.css のカスタムUIに対応 -->
   <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
@@ -76,8 +99,13 @@
 
   <!-- ===== ミニギャラリー ===== -->
   {% if gallery_items %}
-    <hr>
-    <h2 style="margin:16px 0 8px;">アップロード済み画像</h2>
+    <div class="panel-divider"></div>
+    <div class="panel-heading panel-heading--compact">
+      <div class="panel-heading__text">
+        <h3 class="panel-title">アップロード済み画像</h3>
+        <p class="panel-description">ショートコードをコピーして本文に貼り付けると挿絵として表示されます。</p>
+      </div>
+    </div>
 
     <div class="mg-grid">
       {% for it in gallery_items %}
@@ -108,9 +136,62 @@
       <a href="{{ url_for('gallery') }}" class="link-button">すべての画像を一覧表示</a>
     </p>
   {% else %}
-    <p style="opacity:.8;margin-top:8px;">まだ画像がありません。上のフォームからアップロードしてください。</p>
+    <p class="empty-hint">まだ画像がありません。上のフォームからアップロードしてください。</p>
   {% endif %}
 </section>
+
+{% if cloud_targets %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">クラウドバックアップ</h2>
+      <p class="panel-description">{{ cloud_targets | map(attribute='label') | join(' / ') }} に用意した共有フォルダへワンクリックで移動できます。Sync.com マニフェストを設定済みの場合は最新ファイル情報も取得します。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% for provider in cloud_targets %}
+      {% if provider.uploads_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
+          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。
+            {% if provider.key == 'sync' and cloud_manifest.uploads %}
+              <span class="cloud-link-card__meta">（登録 {{ cloud_manifest.uploads|length }} 件）</span>
+            {% endif %}
+          </p>
+          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+
+      {% if provider.saves_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
+          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。
+            {% if provider.key == 'sync' and cloud_manifest.saves %}
+              <span class="cloud-link-card__meta">（登録 {{ cloud_manifest.saves|length }} 件）</span>
+            {% endif %}
+          </p>
+          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list and (cloud_manifest.uploads or cloud_manifest.saves) %}
+    <div class="cloud-manifest__toolbar cloud-manifest__toolbar--inline">
+      <a class="cloud-manifest__refresh" href="{{ url_for('index', sync_refresh=1) }}" {% if sync_refreshing %}data-loading="true"{% endif %}>Sync.com 情報を再取得</a>
+      <a class="cloud-manifest__download" href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>
+    </div>
+  {% endif %}
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <p class="cloud-note cloud-note--accent">Sync.com を利用する場合は、このアプリから <a href="{{ url_for('sync_manifest_export') }}">マニフェスト JSON</a> をダウンロードし、共有フォルダにアップロードしてください。公開リンクを <code>SYNC_MANIFEST_URL</code> に設定すると上の一覧に反映されます。</p>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
 
 <script>
 (() => {
