@@ -373,13 +373,14 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   margin-inline: auto;
 }
 
-.rendered .pixiv-illustration iframe,
-.document .pixiv-illustration iframe{
+.rendered .pixiv-illustration img,
+.document .pixiv-illustration img{
+  display: block;
   width: min(100%, 680px);
-  height: min(540px, 70vh);
-  border: none;
-  border-radius: 12px;
-  overflow: hidden;
+  height: auto;
+  max-height: 72vh;
+  object-fit: contain;
+  border-radius: 10px;
   box-shadow: 0 12px 36px rgba(0,0,0,.35);
 }
 
