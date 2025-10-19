@@ -60,18 +60,22 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
 def _render_pixiv_embed(pid: str) -> str:
     """Return the markup used for `[pixivimage:*]` tokens.
 
-    The anchor wrapping the `<img>` element is styled in both
-    `static/style.css` and the exported sample so the full illustration is
-    clickable.  Keep the `pixiv-image-link` class in sync when resolving
-    conflicts.
+    The wrapper `<div class="pixiv-embed-container">` and the overlay link are
+    required so the illustration fills the iframe while still letting users
+    click the embed to open the original Pixiv page.  These hooks are styled in
+    `static/style.css` and copied into `export.html`; dropping them during
+    conflict resolution will break the preview/export behaviour.
     """
 
     link = f"https://www.pixiv.net/artworks/{pid}"
-    image_src = f"/pixiv/artworks/{pid}/0"
     return (
         '<figure class="pixiv-illustration">'
-        f'<a class="pixiv-image-link" href="{link}" target="_blank" rel="noopener noreferrer">'
-        f'<img src="{image_src}" alt="pixiv作品 {pid}" loading="lazy"></a>'
+        '<div class="pixiv-embed-container">'
+        f'<iframe class="pixiv-embed" src="https://embed.pixiv.net/embed.php?illust_id={pid}&lang=ja"'
+        f' loading="lazy" allowfullscreen frameborder="0" scrolling="no" title="pixiv作品 {pid}"></iframe>'
+        f'<a class="pixiv-embed-overlay" href="{link}" target="_blank" rel="noopener noreferrer"'
+        f' aria-label="pixiv作品 {pid} を開く"></a>'
+        '</div>'
         f'<figcaption><a href="{link}" target="_blank" rel="noopener noreferrer">pixiv作品 {pid} を開く</a></figcaption>'
         '</figure>'
     )
@@ -230,10 +234,8 @@ def _inline_export_assets(html_doc: str) -> str:
     image_sources = set(re.findall(r'<img[^>]+src="([^"]+)"', html_doc))
     if image_sources:
         db = _load_upload_db()
-        pixiv_cache: dict[str, Optional[str]] = {}
         for src in image_sources:
             path = None
-            data_uri = None
             if src.startswith("/uploads/"):
                 path = os.path.join(BASE_DIR, src.lstrip("/"))
             elif src.startswith("/image/"):
@@ -243,28 +245,11 @@ def _inline_export_assets(html_doc: str) -> str:
                     stored = rec.get("stored_name")
                     if stored:
                         path = os.path.join(UPLOAD_DIR, stored)
-            elif src.startswith("/pixiv/artworks/"):
-                if src not in pixiv_cache:
-                    parts = src.strip("/").split("/")
-                    pid = parts[2] if len(parts) >= 3 else parts[-1]
-                    page_index = 0
-                    if len(parts) >= 4:
-                        try:
-                            page_index = int(parts[3])
-                        except ValueError:
-                            page_index = 0
-                    try:
-                        data, mime = fetch_pixiv_image(pid, page_index)
-                    except PixivFetchError:
-                        pixiv_cache[src] = None
-                    else:
-                        b64 = base64.b64encode(data).decode("ascii")
-                        pixiv_cache[src] = f"data:{mime};base64,{b64}"
-                data_uri = pixiv_cache.get(src)
 
-            if path and os.path.exists(path):
-                data_uri = _encode_file_to_data_uri(path)
+            if not path or not os.path.exists(path):
+                continue
 
+            data_uri = _encode_file_to_data_uri(path)
             if data_uri:
                 html_doc = html_doc.replace(f'src="{src}"', f'src="{data_uri}"')
 

@@ -344,6 +344,16 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   text-align: center;
 }
 
+/*
+  Keep the container/overlay selectors in sync with parser.py::_render_pixiv_embed
+  and export.html. They ensure the iframe fills the figure while keeping the
+  entire illustration clickable even after conflict resolutions.
+*/
+.pixiv-illustration .pixiv-embed-container{
+  position: relative;
+  display: inline-block;
+}
+
 /* 画像サイズの標準化（横書き想定） */
 .rendered .illustration img,
 .document .illustration img{
@@ -357,23 +367,27 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   margin-inline: auto;
 }
 
-.rendered .pixiv-illustration img,
-.document .pixiv-illustration img{
-  display: block;
+.rendered .pixiv-illustration iframe,
+.document .pixiv-illustration iframe{
   width: min(100%, 680px);
-  height: auto;
-  max-height: 70vh;
+  height: min(540px, 70vh);
+  border: none;
   border-radius: 12px;
+  overflow: hidden;
   box-shadow: 0 12px 36px rgba(0,0,0,.35);
 }
 
-/* Keep pixiv-image-link in sync with parser.py::_render_pixiv_embed and export.html. */
-.pixiv-illustration .pixiv-image-link{
-  display: inline-block;
+/* The overlay anchor sits on top of the iframe so the full artwork opens Pixiv. */
+.pixiv-illustration .pixiv-embed-overlay{
+  position: absolute;
+  inset: 0;
+  display: block;
   border-radius: 12px;
+  text-indent: -9999px;
+  background: transparent;
 }
 
-.pixiv-illustration .pixiv-image-link:focus-visible{
+.pixiv-illustration .pixiv-embed-overlay:focus-visible{
   outline: 3px solid rgba(119,180,255,.85);
   outline-offset: 4px;
 }
