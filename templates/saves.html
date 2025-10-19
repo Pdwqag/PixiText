@@ -1,14 +1,32 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>保存済みテキスト一覧</h2>
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Draft Archive</span>
+      <h2 class="panel-title">保存済みテキスト一覧</h2>
+      <p class="panel-description">ローカルディスクに保存されたテキストファイルの一覧です。必要なデータを編集・削除し、執筆フローを整えましょう。</p>
+    </div>
+    <div class="panel-actions">
+      <a class="link-button subtle" href="{{ url_for('index') }}">← エディタに戻る</a>
+    </div>
+  </header>
 
-  <p style="margin-bottom:12px;">
-    <a class="back-button" href="{{ url_for('index') }}"><span class="icon">エディタに戻る</span></a>
-  </p>
+  {% if cloud_targets %}
+    <div class="cloud-callout-stack">
+      {% for provider in cloud_targets %}
+        {% if provider.saves_url %}
+          <div class="cloud-callout" role="note">
+            <span class="cloud-callout__badge">{{ provider.label }}</span>
+            <p class="cloud-callout__text">クラウドミラー済みのフォルダを用意しています。<a href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
 
   {% if files %}
-    <div class="mg-grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+    <div class="mg-grid mg-grid-wide">
       {% for f in files %}
         <div class="mg-card">
           <div class="mg-body">
@@ -40,7 +58,53 @@
       {% endfor %}
     </div>
   {% else %}
-    <p style="opacity:.8;">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
+    <p class="empty-hint">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
+  {% endif %}
+
+  {% if sync_saves %}
+    <div class="panel-divider"></div>
+    <section class="cloud-manifest" aria-label="Sync.com テキストバックアップ一覧">
+      <header class="cloud-manifest__header">
+        <h3 class="cloud-manifest__title">Sync.com テキストバックアップ</h3>
+        <p class="cloud-manifest__description">Sync.com のマニフェストからバックアップ済みのテキスト情報を取得しています。バージョンやサイズを確認した上で必要なファイルをダウンロードしてください。</p>
+        <div class="cloud-manifest__toolbar">
+          <a class="cloud-manifest__refresh" href="{{ url_for('saves_list', sync_refresh=1) }}" {% if sync_refreshing %}data-loading="true"{% endif %}>最新情報を再取得</a>
+          <a class="cloud-manifest__download" href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>
+        </div>
+      </header>
+      <div class="cloud-manifest__table-wrapper">
+        <table class="cloud-manifest__table">
+          <thead>
+            <tr>
+              <th scope="col">ファイル名</th>
+              <th scope="col">更新日</th>
+              <th scope="col">サイズ</th>
+              <th scope="col" class="cloud-manifest__actions">リンク</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in sync_saves %}
+              <tr>
+                <td data-title="ファイル名">{{ item.name }}</td>
+                <td data-title="更新日">{{ item.updated or "-" }}</td>
+                <td data-title="サイズ">{{ item.size_label or "-" }}</td>
+                <td data-title="リンク" class="cloud-manifest__actions">
+                  {% if item.url %}
+                    <a href="{{ item.url }}" target="_blank" rel="noopener">開く</a>
+                  {% else %}
+                    <span class="cloud-manifest__placeholder">なし</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="cloud-note cloud-note--accent">
+        <strong>事前準備：</strong> Sync.com 側で <code>saves</code> フォルダを作成し、共有リンクを発行できるようにしておきましょう。
+        エクスポートしたマニフェスト JSON をアップロードし、その公開リンクを <code>SYNC_MANIFEST_URL</code> に設定するとバックアップ一覧が自動で読み込まれます。
+      </p>
+    </section>
   {% endif %}
 </section>
 {% endblock %}
