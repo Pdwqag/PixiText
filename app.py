@@ -1,10 +1,11 @@
 print(">> app loaded:", __file__)
 
-import os, json, random, time, re
+import os, json, random, time, re, threading
 from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
 from werkzeug.utils import secure_filename
 from parser import parse_document, to_html_document
-from datetime import datetime
+from datetime import datetime, timezone
+import requests
 from flask_session import Session
 
 BASE_DIR      = os.path.dirname(__file__)
@@ -88,14 +89,14 @@ def _save_db(db):
 
 def _gen_id(db):
     while True:
-        nid = f"{random.randint(10000,99999)}"
+        nid = f"{random.randint(100000,999999)}"
         if nid not in db: return nid
 
 @app.route("/uploads/<path:filename>")
 def uploaded(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
-# IDで解決する画像URL: /image/12345
+# IDで解決する画像URL: /image/123456
 @app.route("/image/<img_id>")
 def image_by_id(img_id):
     db = _load_db()
@@ -117,7 +118,14 @@ def gallery():
     # 新しい順に並べ替え（簡易）
     items = [{"id": k, **v} for k,v in db.items()]
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    return render_template("gallery.html", items=items)
+    refresh = request.args.get("sync_refresh") == "1"
+    sync_manifest = get_sync_manifest(force_refresh=refresh)
+    return render_template(
+        "gallery.html",
+        items=items,
+        sync_uploads=sync_manifest.get("uploads", []),
+        sync_refreshing=refresh,
+    )
 
 @app.route("/", methods=["GET","POST"])
 def index():
@@ -138,12 +146,17 @@ def index():
     gallery_items = [{"id": k, **v} for k, v in db.items()]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
+    refresh = request.args.get("sync_refresh") == "1"
+    cloud_manifest = get_sync_manifest(force_refresh=refresh)
+
     resp = make_response(render_template(
         "index.html",
         default_text=default_text,
         writing_mode=writing_mode,
         gallery_items=gallery_items,
         last_filename=last_filename,
+        cloud_manifest=cloud_manifest,
+        sync_refreshing=refresh,
     ))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
@@ -365,7 +378,26 @@ def saves_list():
     except Exception as e:
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
-    return render_template("saves.html", files=files)
+    refresh = request.args.get("sync_refresh") == "1"
+    sync_manifest = get_sync_manifest(force_refresh=refresh)
+    return render_template(
+        "saves.html",
+        files=files,
+        sync_saves=sync_manifest.get("saves", []),
+        sync_refreshing=refresh,
+    )
+
+
+@app.route("/saves/download/<path:fname>")
+def saves_download(fname):
+    fname = os.path.basename(fname)
+    if not fname.lower().endswith(".txt"):
+        abort(404)
+    path = os.path.join(SAVES_DIR, fname)
+    if not os.path.exists(path) or not os.path.isfile(path):
+        abort(404)
+    return send_from_directory(SAVES_DIR, fname, as_attachment=True, download_name=fname)
+
 
 @app.route("/saves/auto_open")
 def saves_auto_open():
