@@ -12,13 +12,6 @@
     </div>
   </header>
 
-  {% if mega_saves_url %}
-    <div class="cloud-callout" role="note">
-      <span class="cloud-callout__badge">MEGA</span>
-      <p class="cloud-callout__text">クラウドミラー済みのフォルダを用意しています。<a href="{{ mega_saves_url }}" target="_blank" rel="noopener">MEGA で開く</a></p>
-    </div>
-  {% endif %}
-
   {% if files %}
     <div class="mg-grid mg-grid-wide">
       {% for f in files %}

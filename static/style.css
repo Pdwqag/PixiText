@@ -266,40 +266,10 @@ select:focus{
 
 .site-footer__inner{
   display:flex;
-  flex-wrap:wrap;
   justify-content:space-between;
   align-items:center;
-  gap:12px 18px;
   font-size:.85rem;
   color:rgba(210,220,240,.7);
-}
-
-.site-footer__links{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  align-items:center;
-}
-
-.site-footer__link{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  padding:8px 14px;
-  border-radius:999px;
-  border:1px solid rgba(130,170,240,.28);
-  background:linear-gradient(135deg, rgba(18,32,62,.86), rgba(12,22,48,.94));
-  color:rgba(215,225,245,.85);
-  font-size:.82rem;
-  letter-spacing:.01em;
-  transition:all .2s ease;
-}
-
-.site-footer__link:hover,
-.site-footer__link:focus-visible{
-  color:#fff;
-  border-color:rgba(150,200,255,.55);
-  box-shadow:0 12px 28px rgba(10,18,40,.4);
 }
 
 .site-footer__note{ font-size:.78rem; letter-spacing:.08em; text-transform:uppercase; }
@@ -384,104 +354,6 @@ h3{ font-size:clamp(1.08rem, 1rem + .4vw, 1.28rem); opacity:.95; }
   height:1px;
   background:linear-gradient(90deg, rgba(120,170,255,.25), rgba(120,170,255,0));
   margin:clamp(18px, 1.4vw, 26px) 0;
-}
-
-.panel--cloud{
-  overflow:visible;
-}
-
-.cloud-links{
-  margin-top:clamp(18px, 2vw, 28px);
-  display:grid;
-  gap:clamp(16px, 1.8vw, 26px);
-  grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
-}
-
-.cloud-link-card{
-  padding:22px;
-  border-radius:18px;
-  border:1px solid rgba(130,180,255,.28);
-  background:linear-gradient(140deg, rgba(28,52,96,.58), rgba(18,34,68,.78));
-  box-shadow:0 20px 46px rgba(6,16,36,.48);
-  display:flex;
-  flex-direction:column;
-  gap:14px;
-}
-
-.cloud-link-card__title{
-  font-size:1.05rem;
-  letter-spacing:.01em;
-}
-
-.cloud-link-card__text{
-  margin:0;
-  color:rgba(210,225,245,.78);
-  line-height:1.65;
-}
-
-.cloud-link-card__text code{
-  padding:2px 6px;
-  border-radius:6px;
-  background:rgba(20,36,70,.7);
-  border:1px solid rgba(120,170,255,.35);
-  color:rgba(230,240,255,.92);
-  font-size:.85rem;
-}
-
-.cloud-link-card .link-button{
-  margin-top:auto;
-  align-self:flex-start;
-}
-
-.cloud-note{
-  margin-top:clamp(18px, 1.6vw, 24px);
-  color:rgba(195,210,235,.7);
-  font-size:.9rem;
-  line-height:1.6;
-}
-
-.cloud-callout{
-  margin:clamp(18px, 1.4vw, 24px) 0;
-  padding:18px 20px;
-  border-radius:16px;
-  border:1px solid rgba(125,180,255,.32);
-  background:linear-gradient(145deg, rgba(24,46,88,.6), rgba(16,30,64,.72));
-  box-shadow:0 16px 36px rgba(8,18,40,.42);
-  display:flex;
-  flex-wrap:wrap;
-  gap:14px 20px;
-  align-items:center;
-}
-
-.cloud-callout__badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  padding:6px 14px;
-  border-radius:999px;
-  background:rgba(120,190,255,.28);
-  border:1px solid rgba(140,200,255,.4);
-  font-size:.78rem;
-  letter-spacing:.18em;
-  text-transform:uppercase;
-  color:rgba(235,245,255,.88);
-}
-
-.cloud-callout__text{
-  margin:0;
-  color:rgba(205,220,245,.82);
-  font-size:.92rem;
-  line-height:1.55;
-}
-
-.cloud-callout__text a{
-  color:var(--accent-3);
-  text-decoration:underline;
-}
-
-.cloud-callout__text a:hover,
-.cloud-callout__text a:focus-visible{
-  color:#fff;
 }
 
 

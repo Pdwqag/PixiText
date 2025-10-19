@@ -12,13 +12,6 @@
     </div>
   </header>
 
-  {% if mega_uploads_url %}
-    <div class="cloud-callout" role="note">
-      <span class="cloud-callout__badge">MEGA</span>
-      <p class="cloud-callout__text">共有フォルダにアップロード済みの画像バックアップがあります。<a href="{{ mega_uploads_url }}" target="_blank" rel="noopener">MEGA で開く</a></p>
-    </div>
-  {% endif %}
-
   {% if items %}
     <div class="mg-grid mg-grid-lg">
       {% for it in items %}

@@ -82,18 +82,6 @@
   <footer class="site-footer">
     <div class="container site-footer__inner">
       <small>© You — 個人利用専用</small>
-
-      {% if mega_uploads_url or mega_saves_url %}
-        <div class="site-footer__links" aria-label="クラウドミラー">
-          {% if mega_uploads_url %}
-            <a class="site-footer__link" href="{{ mega_uploads_url }}" target="_blank" rel="noopener">MEGA アップロード</a>
-          {% endif %}
-          {% if mega_saves_url %}
-            <a class="site-footer__link" href="{{ mega_saves_url }}" target="_blank" rel="noopener">MEGA テキスト保存</a>
-          {% endif %}
-        </div>
-      {% endif %}
-
       <span class="site-footer__note">PixiText v{{ config.get('BUILD_VER', 1) }}</span>
     </div>
   </footer>
