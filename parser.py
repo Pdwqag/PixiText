@@ -5,12 +5,11 @@ from typing import Optional
 from html import escape
 from urllib.parse import quote
 
-from pixiv import fetch_pixiv_image, PixivFetchError
 
 # ---------- 正規表現 ----------
 RE_NEWPAGE  = re.compile(r'\[newpage\]')
 RE_UPLOADED = re.compile(r'^\[uploadedimage:(.*?)\]$')
-RE_PIXIV    = re.compile(r'^\[pixivimage:(\d+)\]$')
+RE_PIXIV    = re.compile(r'^\[pixivimage:(\d+)(?:@(\d+))?\]$')
 RE_JUMP_BLK = re.compile(r'^\[jump:(\d+)\]$')
 RE_JUMP_INL = re.compile(r'\[jump:(\d+)\]')
 RE_JUMPURI  = re.compile(r'\[\[jumpuri:(.*?)\s*(?:>|&gt;)\s*(.*?)\]\]')
@@ -57,26 +56,34 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
     return f"/uploads/{quote(token)}", token
 
 
-def _render_pixiv_embed(pid: str) -> str:
+def _render_pixiv_embed(pid: str, page: Optional[int] = None) -> str:
     """Return the markup used for `[pixivimage:*]` tokens.
 
-    The wrapper `<div class="pixiv-embed-container">` and the overlay link are
-    required so the illustration fills the iframe while still letting users
-    click the embed to open the original Pixiv page.  These hooks are styled in
-    `static/style.css` and copied into `export.html`; dropping them during
-    conflict resolution will break the preview/export behaviour.
+    The figure reuses the standard `.illustration` class so uploaded images and
+    Pixiv illustrations share the same sizing.  The `<img>` itself points at
+    `/pixiv/artworks/...`, which proxies the request and adds the mandatory
+    Referer header for Pixiv's CDN.
     """
 
-    link = f"https://www.pixiv.net/artworks/{pid}"
+    page = page or 1
+    if page < 1:
+        page = 1
+
+    page_index = page - 1
+    image_src = f"/pixiv/artworks/{pid}"
+    if page_index:
+        image_src += f"/{page_index}"
+
+    link_base = f"https://www.pixiv.net/artworks/{pid}"
+    link_href = link_base if page_index == 0 else f"{link_base}?page={page_index}"
+    page_suffix = "" if page == 1 else f"（{page}枚目）"
+    alt = f"pixiv作品 {pid}{page_suffix}"
+    caption = f"pixiv作品 {pid} を開く{page_suffix}"
+
     return (
-        '<figure class="pixiv-illustration">'
-        '<div class="pixiv-embed-container">'
-        f'<iframe class="pixiv-embed" src="https://embed.pixiv.net/embed.php?illust_id={pid}&lang=ja"'
-        f' loading="lazy" allowfullscreen frameborder="0" scrolling="no" title="pixiv作品 {pid}"></iframe>'
-        f'<a class="pixiv-embed-overlay" href="{link}" target="_blank" rel="noopener noreferrer"'
-        f' aria-label="pixiv作品 {pid} を開く"></a>'
-        '</div>'
-        f'<figcaption><a href="{link}" target="_blank" rel="noopener noreferrer">pixiv作品 {pid} を開く</a></figcaption>'
+        '<figure class="illustration pixiv-illustration">'
+        f'<img src="{image_src}" alt="{alt}" loading="lazy" decoding="async">'
+        f'<figcaption><a href="{link_href}" target="_blank" rel="noopener noreferrer">{caption}</a></figcaption>'
         '</figure>'
     )
 
@@ -141,7 +148,9 @@ def render_block(block: str, page_index: int) -> str:
         m = RE_PIXIV.match(line.strip())
         if m:
             flush_buf()
-            out_parts.append(_render_pixiv_embed(m.group(1)))
+            pid = m.group(1)
+            page = int(m.group(2)) if m.group(2) else None
+            out_parts.append(_render_pixiv_embed(pid, page))
             continue
 
         if line == "":
@@ -157,7 +166,9 @@ def render_block(block: str, page_index: int) -> str:
     # --- （ここから下は章でも画像でもなかった時のフォールバック達） ---
     m = RE_PIXIV.match(s)
     if m:
-        return _render_pixiv_embed(m.group(1))
+        pid = m.group(1)
+        page = int(m.group(2)) if m.group(2) else None
+        return _render_pixiv_embed(pid, page)
 
     m = RE_JUMP_BLK.match(s)
     if m:

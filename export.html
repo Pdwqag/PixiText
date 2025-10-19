@@ -347,15 +347,6 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   text-align: center;
 }
 
-/*
-  Keep these selectors aligned with static/style.css and parser.py::_render_pixiv_embed.
-  They provide the clickable overlay for Pixiv iframes in exported documents.
-*/
-.pixiv-illustration .pixiv-embed-container{
-  position: relative;
-  display: inline-block;
-}
-
 /* 画像サイズの標準化（横書き想定） */
 .rendered .illustration img,
 .document .illustration img{
@@ -369,28 +360,16 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   margin-inline: auto;
 }
 
-.rendered .pixiv-illustration iframe,
-.document .pixiv-illustration iframe{
-  width: min(100%, 680px);
-  height: min(540px, 70vh);
-  border: none;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 12px 36px rgba(0,0,0,.35);
-}
-
-.pixiv-illustration .pixiv-embed-overlay{
-  position: absolute;
-  inset: 0;
+.rendered .pixiv-illustration img,
+.document .pixiv-illustration img{
   display: block;
-  border-radius: 12px;
-  text-indent: -9999px;
-  background: transparent;
-}
-
-.pixiv-illustration .pixiv-embed-overlay:focus-visible{
-  outline: 3px solid rgba(119,180,255,.85);
-  outline-offset: 4px;
+  width: min(100%, 680px);
+  height: auto;
+  max-height: 72vh;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35);
+  margin-inline: auto;
 }
 
 .pixiv-illustration figcaption{
@@ -433,9 +412,9 @@ a.jump{ text-decoration:underline; cursor:pointer; }
 </section>
 <section class="page" id="page-3" data-index="3">
 <span id="3" class="page-anchor" aria-hidden="true"></span>
-<div class="page-inner"><div class="blankline" aria-hidden="true"></div>
-<div class="blankline" aria-hidden="true"></div>
-<h2 class="chapter">リンク</h2><figure class="pixiv-illustration"><div class="pixiv-embed-container"><iframe class="pixiv-embed" src="https://embed.pixiv.net/embed.php?illust_id=123456789&amp;lang=ja" loading="lazy" allowfullscreen frameborder="0" scrolling="no" title="pixiv作品 123456789"></iframe><a class="pixiv-embed-overlay" href="https://www.pixiv.net/artworks/123456789" target="_blank" rel="noopener noreferrer" aria-label="pixiv作品 123456789 を開く"></a></div><figcaption><a href="https://www.pixiv.net/artworks/123456789" target="_blank" rel="noopener noreferrer">pixiv作品 123456789 を開く</a></figcaption></figure><p><a href="https://www.pixiv.net/" target="_blank" rel="noopener noreferrer">pixiv を開く</a></p></div>
+  <div class="page-inner"><div class="blankline" aria-hidden="true"></div>
+  <div class="blankline" aria-hidden="true"></div>
+  <h2 class="chapter">リンク</h2><figure class="illustration pixiv-illustration"><img src="/pixiv/artworks/123456789" alt="pixiv作品 123456789" loading="lazy" decoding="async"><figcaption><a href="https://www.pixiv.net/artworks/123456789" target="_blank" rel="noopener noreferrer">pixiv作品 123456789 を開く</a></figcaption></figure><p><a href="https://www.pixiv.net/" target="_blank" rel="noopener noreferrer">pixiv を開く</a></p></div>
 </section>
 <section class="page" id="page-4" data-index="4">
 <span id="4" class="page-anchor" aria-hidden="true"></span>
