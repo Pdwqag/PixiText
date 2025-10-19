@@ -12,19 +12,6 @@
     </div>
   </header>
 
-  {% if cloud_targets %}
-    <div class="cloud-callout-stack">
-      {% for provider in cloud_targets %}
-        {% if provider.uploads_url %}
-          <div class="cloud-callout" role="note">
-            <span class="cloud-callout__badge">{{ provider.label }}</span>
-            <p class="cloud-callout__text">共有フォルダにミラーされた画像バックアップへアクセスできます。<a href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
-          </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  {% endif %}
-
   {% if items %}
     <div class="mg-grid mg-grid-lg">
       {% for it in items %}

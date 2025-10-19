@@ -1,10 +1,11 @@
 print(">> app loaded:", __file__)
 
-import os, json, random, time, re
+import os, json, random, time, re, threading
 from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
 from werkzeug.utils import secure_filename
 from parser import parse_document, to_html_document
 from datetime import datetime, timezone
+import requests
 from flask_session import Session
 
 BASE_DIR      = os.path.dirname(__file__)
@@ -37,9 +38,15 @@ app.config.update(
     SESSION_TYPE="filesystem",
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
-    BUILD_VER=24,   # キャッシュバスター
-    SYNC_UPLOADS_URL=os.getenv("SYNC_UPLOADS_URL", "https://cp.sync.com/files"),
-    SYNC_SAVES_URL=os.getenv("SYNC_SAVES_URL", "https://cp.sync.com/files"),
+    BUILD_VER=23,   # キャッシュバスター
+    MEGA_UPLOADS_URL=os.getenv(
+        "MEGA_UPLOADS_URL",
+        "https://mega.nz/folder/OLRGnAKb#wmS6uxo7a3lXRQj7bS-WGg",
+    ),
+    MEGA_SAVES_URL=os.getenv(
+        "MEGA_SAVES_URL",
+        "https://mega.nz/folder/7PoxwB5T#SF_MLltqDChJy9MiuiKVvA",
+    ),
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
@@ -67,120 +74,10 @@ def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWE
 # === テンプレート共通変数 ===
 @app.context_processor
 def inject_cloud_links():
-    providers = []
-
-    def _provider(key, label, uploads_url, saves_url):
-        if not uploads_url and not saves_url:
-            return None
-        return dict(
-            key=key,
-            label=label,
-            uploads_url=uploads_url or "",
-            saves_url=saves_url or "",
-        )
-
-    sync = _provider(
-        "sync",
-        "Sync.com",
-        app.config.get("SYNC_UPLOADS_URL"),
-        app.config.get("SYNC_SAVES_URL"),
-    )
-    for entry in (sync,):
-        if entry:
-            providers.append(entry)
-
     return dict(
-        sync_uploads_url=app.config.get("SYNC_UPLOADS_URL"),
-        sync_saves_url=app.config.get("SYNC_SAVES_URL"),
-        cloud_targets=providers,
+        mega_uploads_url=app.config.get("MEGA_UPLOADS_URL"),
+        mega_saves_url=app.config.get("MEGA_SAVES_URL"),
     )
-
-
-def _human_size(num):
-    if num is None:
-        return None
-    try:
-        num = float(num)
-    except Exception:
-        return None
-    units = ["B", "KB", "MB", "GB", "TB"]
-    idx = 0
-    while num >= 1024 and idx < len(units) - 1:
-        num /= 1024
-        idx += 1
-    return f"{num:.1f}{units[idx]}"
-
-
-def _stat_path(path):
-    if not path:
-        return None
-    try:
-        st = os.stat(path)
-    except OSError:
-        return None
-    return {"size": st.st_size, "mtime": st.st_mtime}
-
-
-def _iso_timestamp(ts):
-    if not ts:
-        return None
-    try:
-        dt = datetime.fromtimestamp(float(ts), timezone.utc).astimezone()
-        return dt.replace(microsecond=0).isoformat()
-    except Exception:
-        return None
-
-
-def build_local_sync_manifest():
-    uploads = []
-    db = _load_db()
-    for img_id, rec in sorted(db.items(), key=lambda x: x[1].get("ts", 0), reverse=True):
-        stored = rec.get("stored_name")
-        path = os.path.join(app.config["UPLOAD_FOLDER"], stored) if stored else None
-        meta = _stat_path(path)
-        uploads.append(
-            {
-                "id": img_id,
-                "name": rec.get("original_name") or stored or img_id,
-                "stored_name": stored,
-                "url": f"/image/{img_id}",
-                "size": meta["size"] if meta else None,
-                "size_label": _human_size(meta["size"]) if meta else None,
-                "updated": _iso_timestamp(meta["mtime"]) if meta else None,
-                "shortcode": f"[uploadedimage:{img_id}]",
-            }
-        )
-
-    saves = []
-    if os.path.isdir(SAVES_DIR):
-        for name in sorted(os.listdir(SAVES_DIR)):
-            path = os.path.join(SAVES_DIR, name)
-            if not os.path.isfile(path):
-                continue
-            meta = _stat_path(path)
-            saves.append(
-                {
-                    "name": name,
-                    "url": f"/saves/download/{name}",
-                    "size": meta["size"] if meta else None,
-                    "size_label": _human_size(meta["size"]) if meta else None,
-                    "updated": _iso_timestamp(meta["mtime"]) if meta else None,
-                }
-            )
-
-    return {"uploads": uploads, "saves": saves}
-
-
-@app.route("/sync/manifest.json")
-def sync_manifest_export():
-    data = build_local_sync_manifest()
-    payload = json.dumps(data, ensure_ascii=False, indent=2)
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    resp = make_response(payload)
-    resp.headers["Content-Type"] = "application/json; charset=utf-8"
-    resp.headers["Content-Disposition"] = f"attachment; filename=sync-manifest-{ts}.json"
-    resp.headers["Cache-Control"] = "no-store"
-    return resp
 
 # --- 簡易DB ---
 def _load_db():
@@ -221,9 +118,13 @@ def gallery():
     # 新しい順に並べ替え（簡易）
     items = [{"id": k, **v} for k,v in db.items()]
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
+    refresh = request.args.get("sync_refresh") == "1"
+    sync_manifest = get_sync_manifest(force_refresh=refresh)
     return render_template(
         "gallery.html",
         items=items,
+        sync_uploads=sync_manifest.get("uploads", []),
+        sync_refreshing=refresh,
     )
 
 @app.route("/", methods=["GET","POST"])
@@ -245,12 +146,17 @@ def index():
     gallery_items = [{"id": k, **v} for k, v in db.items()]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
+    refresh = request.args.get("sync_refresh") == "1"
+    cloud_manifest = get_sync_manifest(force_refresh=refresh)
+
     resp = make_response(render_template(
         "index.html",
         default_text=default_text,
         writing_mode=writing_mode,
         gallery_items=gallery_items,
         last_filename=last_filename,
+        cloud_manifest=cloud_manifest,
+        sync_refreshing=refresh,
     ))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
@@ -472,9 +378,13 @@ def saves_list():
     except Exception as e:
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
+    refresh = request.args.get("sync_refresh") == "1"
+    sync_manifest = get_sync_manifest(force_refresh=refresh)
     return render_template(
         "saves.html",
         files=files,
+        sync_saves=sync_manifest.get("saves", []),
+        sync_refreshing=refresh,
     )
 
 
