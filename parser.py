@@ -5,6 +5,8 @@ from typing import Optional
 from html import escape
 from urllib.parse import quote
 
+from pixiv import fetch_pixiv_image, PixivFetchError
+
 # ---------- 正規表現 ----------
 RE_NEWPAGE  = re.compile(r'\[newpage\]')
 RE_UPLOADED = re.compile(r'^\[uploadedimage:(.*?)\]$')
