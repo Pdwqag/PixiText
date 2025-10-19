@@ -21,14 +21,32 @@
   </script>
 </head>
 
-<body>
+<body class="theme-night">
+  <div class="site-background" aria-hidden="true"></div>
+
   <header class="site-header">
-    <h1>PixiText（ローカル）</h1>
-    {% if request.endpoint == 'preview' %}
-      <a href="{{ url_for('index') }}" class="back-button" aria-label="エディタに戻る">
-        <span class="icon">←</span>エディタに戻る
+    <div class="container site-header__inner">
+      <a class="site-brand" href="{{ url_for('index') }}" aria-label="PixiText ホーム">
+        <span class="site-brand__icon" aria-hidden="true"></span>
+        <span class="site-brand__text">
+          <span class="site-brand__title">PixiText</span>
+          <span class="site-brand__tagline">ローカル制作スタジオ</span>
+        </span>
       </a>
-    {% endif %}
+
+      <nav class="site-nav" aria-label="主要ナビゲーション">
+        <a href="{{ url_for('index') }}" class="nav-link{% if request.endpoint in ['index', 'preview'] %} active{% endif %}">エディタ</a>
+        <a href="{{ url_for('gallery') }}" class="nav-link{% if request.endpoint == 'gallery' %} active{% endif %}">ギャラリー</a>
+        <a href="{{ url_for('saves_list') }}" class="nav-link{% if request.endpoint in ['saves_list', 'saves_open'] %} active{% endif %}">テキスト保存</a>
+      </nav>
+
+      {% if request.endpoint == 'preview' %}
+        <a href="{{ url_for('index') }}" class="back-button nav-cta" aria-label="エディタに戻る">
+          <span class="icon">←</span>
+          <span>エディタに戻る</span>
+        </a>
+      {% endif %}
+    </div>
   </header>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -45,7 +63,7 @@
     {% endif %}
   {% endwith %}
 
-  <main>
+  <main class="site-main container">
     {% block content %}{% endblock %}
   </main>
 
@@ -62,7 +80,22 @@
   </div>
 
   <footer class="site-footer">
-    <small>© You — 個人利用専用</small>
+    <div class="container site-footer__inner">
+      <small>© You — 個人利用専用</small>
+
+      {% if mega_uploads_url or mega_saves_url %}
+        <div class="site-footer__links" aria-label="クラウドミラー">
+          {% if mega_uploads_url %}
+            <a class="site-footer__link" href="{{ mega_uploads_url }}" target="_blank" rel="noopener">MEGA アップロード</a>
+          {% endif %}
+          {% if mega_saves_url %}
+            <a class="site-footer__link" href="{{ mega_saves_url }}" target="_blank" rel="noopener">MEGA テキスト保存</a>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <span class="site-footer__note">PixiText v{{ config.get('BUILD_VER', 1) }}</span>
+    </div>
   </footer>
 
   <!-- ④ JS は最後に1回だけ -->
