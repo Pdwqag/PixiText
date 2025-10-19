@@ -12,19 +12,6 @@
     </div>
   </header>
 
-  {% if cloud_targets %}
-    <div class="cloud-callout-stack">
-      {% for provider in cloud_targets %}
-        {% if provider.uploads_url %}
-          <div class="cloud-callout" role="note">
-            <span class="cloud-callout__badge">{{ provider.label }}</span>
-            <p class="cloud-callout__text">共有フォルダにミラーされた画像バックアップへアクセスできます。<a href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
-          </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  {% endif %}
-
   {% if items %}
     <div class="mg-grid mg-grid-lg">
       {% for it in items %}
@@ -54,12 +41,12 @@
 
   <div class="panel-divider"></div>
   <section class="cloud-note cloud-note--accent" aria-label="Sync.com 連携ガイド">
-    <p><strong>Sync.com 側で準備しておくもの</strong></p>
-    <ul>
-      <li>画像を保管するための共有フォルダ <code>uploads</code>。</li>
-      <li>そのフォルダに割り当てた共有リンク（このページ上部のショートカットに設定できます）。</li>
-      <li>バックアップ更新時にアップロードするローカル画像ファイル。</li>
-    </ul>
+    <p><strong>Sync.com で画像を管理するには</strong></p>
+    <ol>
+      <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、<code>uploads</code> フォルダを作成して共有リンクを取得します。</li>
+      <li>ここでダウンロードした画像ファイルをそのフォルダへアップロードし、バックアップを最新状態に保ちます。</li>
+      <li>（任意）<a href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>して Sync.com にアップロードすると、クラウド側でもファイル一覧を確認しやすくなります。</li>
+    </ol>
   </section>
 </section>
 {% endblock %}
