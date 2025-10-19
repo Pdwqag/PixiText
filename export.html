@@ -349,9 +349,15 @@ a.jump{ text-decoration:underline; cursor:pointer; }
 
 /*
   Keep these selectors aligned with static/style.css and parser.py::_render_pixiv_embed.
-  They provide the clickable overlay for Pixiv iframes in exported documents.
+  The --image variant mirrors the proxy <img> markup so the overlay works for
+  both the iframe and the routed image when exporting.
 */
 .pixiv-illustration .pixiv-embed-container{
+  position: relative;
+  display: inline-block;
+}
+
+.pixiv-illustration .pixiv-embed-container--image{
   position: relative;
   display: inline-block;
 }
@@ -376,6 +382,17 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   border: none;
   border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35);
+}
+
+.rendered .pixiv-illustration img,
+.document .pixiv-illustration img{
+  display: block;
+  width: min(100%, 680px);
+  height: auto;
+  max-height: 72vh;
+  object-fit: contain;
+  border-radius: 12px;
   box-shadow: 0 12px 36px rgba(0,0,0,.35);
 }
 
