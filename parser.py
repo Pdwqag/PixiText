@@ -56,6 +56,15 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
 
 
 def _render_pixiv_embed(pid: str) -> str:
+    """Return the markup used for `[pixivimage:*]` tokens.
+
+    The wrapper `<div class="pixiv-embed-container">` and the overlay link are
+    required so the illustration fills the iframe while still letting users
+    click the embed to open the original Pixiv page.  These hooks are styled in
+    `static/style.css` and copied into `export.html`; dropping them during
+    conflict resolution will break the preview/export behaviour.
+    """
+
     link = f"https://www.pixiv.net/artworks/{pid}"
     return (
         '<figure class="pixiv-illustration">'

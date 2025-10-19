@@ -344,6 +344,11 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   text-align: center;
 }
 
+/*
+  Keep the container/overlay selectors in sync with parser.py::_render_pixiv_embed
+  and export.html. They ensure the iframe fills the figure while keeping the
+  entire illustration clickable even after conflict resolutions.
+*/
 .pixiv-illustration .pixiv-embed-container{
   position: relative;
   display: inline-block;
@@ -372,6 +377,7 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   box-shadow: 0 12px 36px rgba(0,0,0,.35);
 }
 
+/* The overlay anchor sits on top of the iframe so the full artwork opens Pixiv. */
 .pixiv-illustration .pixiv-embed-overlay{
   position: absolute;
   inset: 0;
