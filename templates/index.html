@@ -462,6 +462,52 @@
 </section>
 {% endif %}
 
+{% if cloud_targets %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">クラウドバックアップ</h2>
+      <p class="panel-description">Sync.com へ手動でバックアップするためのガイドです。以下の手順に従って共有フォルダを整備してください。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% for provider in cloud_targets %}
+      {% if provider.uploads_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
+          <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。</p>
+          <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+
+      {% if provider.saves_url %}
+        <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
+          <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。</p>
+          <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p><strong>Sync.com に向けて用意するもの</strong></p>
+      <ul>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にアクセスできる Sync.com アカウント。</li>
+        <li>挿絵を格納するための共有フォルダ <code>uploads</code>。</li>
+        <li>テキスト原稿を格納するための共有フォルダ <code>saves</code>。</li>
+        <li>それぞれのフォルダから取得した共有リンク（このパネルのショートカットに登録すると便利です）。</li>
+      </ul>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
+</section>
+{% endif %}
+
 <script>
 (() => {
   const textEl = document.getElementById('text');
