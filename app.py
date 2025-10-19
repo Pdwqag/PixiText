@@ -38,6 +38,14 @@ app.config.update(
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
     BUILD_VER=23,   # キャッシュバスター
+    MEGA_UPLOADS_URL=os.getenv(
+        "MEGA_UPLOADS_URL",
+        "https://mega.nz/folder/OLRGnAKb#wmS6uxo7a3lXRQj7bS-WGg",
+    ),
+    MEGA_SAVES_URL=os.getenv(
+        "MEGA_SAVES_URL",
+        "https://mega.nz/folder/7PoxwB5T#SF_MLltqDChJy9MiuiKVvA",
+    ),
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
@@ -61,6 +69,14 @@ Session(app)
 
 
 def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
+
+# === テンプレート共通変数 ===
+@app.context_processor
+def inject_cloud_links():
+    return dict(
+        mega_uploads_url=app.config.get("MEGA_UPLOADS_URL"),
+        mega_saves_url=app.config.get("MEGA_SAVES_URL"),
+    )
 
 # --- 簡易DB ---
 def _load_db():
