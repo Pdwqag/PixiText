@@ -138,7 +138,54 @@
   {% else %}
     <p class="empty-hint">まだ画像がありません。上のフォームからアップロードしてください。</p>
   {% endif %}
+
+  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+    <div class="cloud-note cloud-note--accent">
+      <p>Sync.com を利用する場合は次の流れで設定してください。</p>
+      <ol>
+        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にサインインし、<code>uploads</code> と <code>saves</code> の2フォルダを用意します。</li>
+        <li>このアプリから <a href="{{ url_for('sync_manifest_export') }}">マニフェスト JSON</a> をダウンロードし、バックアップ用フォルダにアップロードします。</li>
+        <li>Sync.com 側で JSON ファイルを共有し、その公開リンクを環境変数 <code>SYNC_MANIFEST_URL</code>（または設定ファイル）に登録します。</li>
+      </ol>
+      <p>設定後は上の一覧で Sync.com の最新情報を再読み込みできます。</p>
+    </div>
+  {% endif %}
+
+  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
 </section>
+{% endif %}
+
+{% if mega_uploads_url or mega_saves_url %}
+<section class="panel panel--cloud" id="cloud-mirror">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Cloud Mirror</span>
+      <h2 class="panel-title">MEGA バックアップ</h2>
+      <p class="panel-description">ローカル保存に加えて、共有済みの MEGA フォルダからファイルを取得・同期できます。必要なときに素早くアクセスできるよう、ショートカットをまとめました。</p>
+    </div>
+  </header>
+
+  <div class="cloud-links">
+    {% if mega_uploads_url %}
+      <article class="cloud-link-card">
+        <h3 class="cloud-link-card__title">挿絵アップロード</h3>
+        <p class="cloud-link-card__text"><code>uploads/</code> 内の画像ファイルをミラーしています。別デバイスから素材を取り込みたいときにご利用ください。</p>
+        <a class="link-button subtle" href="{{ mega_uploads_url }}" target="_blank" rel="noopener">MEGA で開く</a>
+      </article>
+    {% endif %}
+
+    {% if mega_saves_url %}
+      <article class="cloud-link-card">
+        <h3 class="cloud-link-card__title">テキスト保存</h3>
+        <p class="cloud-link-card__text"><code>saves/</code> にあるテキスト原稿のバックアップです。万一ローカルが失われた場合でも、ここからダウンロードして復旧できます。</p>
+        <a class="link-button subtle" href="{{ mega_saves_url }}" target="_blank" rel="noopener">MEGA で開く</a>
+      </article>
+    {% endif %}
+  </div>
+
+  <p class="cloud-note">リンク先は共有フォルダです。必要に応じてご自身の MEGA アカウントへコピーし、アクセス権管理を行ってください。</p>
+</section>
+{% endif %}
 
 {% if cloud_targets %}
 <section class="panel panel--cloud" id="cloud-mirror">
