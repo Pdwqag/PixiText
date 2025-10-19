@@ -65,8 +65,6 @@ Session(app)
 def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
 
 # === テンプレート共通変数 ===
-# NOTE: 以前の Sync 用ヘルパー `get_sync_manifest` は完全に撤去済み。
-#       クラウド案内は静的なリンクのみに限定されている。
 @app.context_processor
 def inject_cloud_links():
     providers = []
