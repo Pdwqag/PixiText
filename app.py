@@ -167,12 +167,19 @@ def index():
     gallery_items = [{"id": k, **v} for k, v in db.items()]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
+    refresh = request.args.get("sync_refresh") == "1"
+    cloud_manifest = load_cloud_manifest(force_refresh=refresh)
+    cloud_targets = cloud_manifest.get("targets", [])
+
     resp = make_response(render_template(
         "index.html",
         default_text=default_text,
         writing_mode=writing_mode,
         gallery_items=gallery_items,
         last_filename=last_filename,
+        cloud_manifest=cloud_manifest,
+        cloud_targets=cloud_targets,
+        sync_refreshing=refresh,
     ))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
