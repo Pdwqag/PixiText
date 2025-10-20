@@ -55,8 +55,8 @@ app.config.update(
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
     BUILD_VER=24,  # キャッシュバスター
-    SYNC_UPLOADS_URL=os.getenv("SYNC_UPLOADS_URL", "https://cp.sync.com/files"),
-    SYNC_SAVES_URL=os.getenv("SYNC_SAVES_URL", "https://cp.sync.com/files"),
+    SYNC_UPLOADS_URL=os.getenv("SYNC_UPLOADS_URL", "https://ln5.sync.com/dl/6643d5940#v74nbenq-egdk7g8k-fnxm268q-a2qmhqnh"),
+    SYNC_SAVES_URL=os.getenv("SYNC_SAVES_URL", "https://ln5.sync.com/dl/09e74e690#7ufepdfq-nxtt4d66-y5pqdnsy-rvub53cy"),
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
