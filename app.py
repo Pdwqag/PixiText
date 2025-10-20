@@ -79,7 +79,7 @@ app.config.update(
     GCS_SAVES_PREFIX=os.getenv("GCS_SAVES_PREFIX", "saves"),
     GCS_SERVICE_ACCOUNT_KEY=os.getenv(
         "GCS_SERVICE_ACCOUNT_KEY",
-        os.path.join(BASE_DIR, "pixitext-475704-6c5d65f6c0cf.json"),
+        "",
     ),
     GCS_SERVICE_ACCOUNT_JSON=os.getenv("GCS_SERVICE_ACCOUNT_JSON", ""),
     GCS_SERVICE_ACCOUNT_EMAIL=os.getenv(
