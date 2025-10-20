@@ -1,23 +1,40 @@
-print(">> app loaded:", __file__)
+import os
+import json
+import random
+import re
+import time
+from datetime import datetime, timezone
 
-import os, json, random, time, re
-from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
-from werkzeug.utils import secure_filename
-from parser import parse_document, to_html_document
-from datetime import datetime
+from flask import (
+    Flask,
+    abort,
+    flash,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    send_from_directory,
+    session,
+    url_for,
+)
 from flask_session import Session
+from werkzeug.utils import secure_filename
 
-BASE_DIR      = os.path.dirname(__file__)
+from parser import parse_document, to_html_document
+
+BASE_DIR = os.path.dirname(__file__)
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-STATIC_DIR    = os.path.join(BASE_DIR, "static")
-UPLOAD_DIR    = os.path.join(BASE_DIR, "uploads")
-SAVES_DIR     = os.path.join(BASE_DIR, "saves")
-SESSION_DIR   = os.path.join(BASE_DIR, "flask_session")
-DB_PATH       = os.path.join(UPLOAD_DIR, "uploads.json")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+SAVES_DIR = os.path.join(BASE_DIR, "saves")
+SESSION_DIR = os.path.join(BASE_DIR, "flask_session")
+DB_PATH = os.path.join(UPLOAD_DIR, "uploads.json")
 
 # 必要なディレクトリは必ず作成
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(SAVES_DIR,  exist_ok=True)
+os.makedirs(SAVES_DIR, exist_ok=True)
 os.makedirs(SESSION_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
@@ -27,7 +44,7 @@ app = Flask(
     __name__,
     static_url_path="/static",
     static_folder=STATIC_DIR,
-    template_folder=TEMPLATES_DIR
+    template_folder=TEMPLATES_DIR,
 )
 
 # 2) 設定をまとめて投入（重複を避ける）
@@ -37,30 +54,55 @@ app.config.update(
     SESSION_TYPE="filesystem",
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
-    BUILD_VER=23,   # キャッシュバスター
+    BUILD_VER=24,  # キャッシュバスター
+    SYNC_UPLOADS_URL=os.getenv("SYNC_UPLOADS_URL", "https://cp.sync.com/files"),
+    SYNC_SAVES_URL=os.getenv("SYNC_SAVES_URL", "https://cp.sync.com/files"),
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
 Session(app)
 
+
 @app.after_request
 def _no_cache_static_css(resp):
-    try:
-        from flask import request
-        if request.path.endswith('/static/style.css'):
-            resp.headers['Cache-Control'] = 'no-store'
-    except Exception:
-        pass
+    if request.path.endswith("/static/style.css"):
+        resp.headers["Cache-Control"] = "no-store"
     return resp
-
-sess_dir = os.path.join(BASE_DIR, "flask_session")
-os.makedirs(sess_dir, exist_ok=True) 
-app.config['SESSION_FILE_DIR'] = sess_dir
-
-Session(app)
 
 
 def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
+
+# === テンプレート共通変数 ===
+@app.context_processor
+def inject_cloud_links():
+    providers = []
+
+    def _provider(key, label, uploads_url, saves_url):
+        if not uploads_url and not saves_url:
+            return None
+        return dict(
+            key=key,
+            label=label,
+            uploads_url=uploads_url or "",
+            saves_url=saves_url or "",
+        )
+
+    sync = _provider(
+        "sync",
+        "Sync.com",
+        app.config.get("SYNC_UPLOADS_URL"),
+        app.config.get("SYNC_SAVES_URL"),
+    )
+    for entry in (sync,):
+        if entry:
+            providers.append(entry)
+
+    return dict(
+        sync_uploads_url=app.config.get("SYNC_UPLOADS_URL"),
+        sync_saves_url=app.config.get("SYNC_SAVES_URL"),
+        cloud_targets=providers,
+    )
+
 
 # --- 簡易DB ---
 def _load_db():
@@ -72,14 +114,14 @@ def _save_db(db):
 
 def _gen_id(db):
     while True:
-        nid = f"{random.randint(10000,99999)}"
+        nid = f"{random.randint(100000,999999)}"
         if nid not in db: return nid
 
 @app.route("/uploads/<path:filename>")
 def uploaded(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
-# IDで解決する画像URL: /image/12345
+# IDで解決する画像URL: /image/123456
 @app.route("/image/<img_id>")
 def image_by_id(img_id):
     db = _load_db()
@@ -101,7 +143,10 @@ def gallery():
     # 新しい順に並べ替え（簡易）
     items = [{"id": k, **v} for k,v in db.items()]
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    return render_template("gallery.html", items=items)
+    return render_template(
+        "gallery.html",
+        items=items,
+    )
 
 @app.route("/", methods=["GET","POST"])
 def index():
@@ -349,7 +394,11 @@ def saves_list():
     except Exception as e:
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
-    return render_template("saves.html", files=files)
+    return render_template(
+        "saves.html",
+        files=files,
+    )
+
 
 @app.route("/saves/auto_open")
 def saves_auto_open():
