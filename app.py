@@ -1,11 +1,12 @@
 print(">> app loaded:", __file__)
 
 import os, json, random, time, re, threading
+from copy import deepcopy
 from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
 from werkzeug.utils import secure_filename
 from parser import parse_document, to_html_document
 from datetime import datetime, timezone
-import requests
+from urllib import request as urllib_request, error as urllib_error
 from flask_session import Session
 
 BASE_DIR      = os.path.dirname(__file__)
@@ -71,6 +72,139 @@ Session(app)
 
 def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
 
+
+# === Sync.com manifest utilities ==========================================
+
+_CLOUD_MANIFEST_CACHE = {"data": None}
+_CLOUD_MANIFEST_LOCK = threading.Lock()
+
+
+def _empty_cloud_manifest(error_message: str | None = None) -> dict:
+    """Return an empty manifest payload with optional error information."""
+
+    return {
+        "uploads": [],
+        "saves": [],
+        "source": None,
+        "fetched_at": None,
+        "error": error_message,
+        "_raw_targets": [],
+    }
+
+
+def _merge_cloud_targets(raw_targets: list | None) -> list:
+    """Combine manifest-provided targets with environment overrides."""
+
+    merged: list[dict] = []
+    seen_keys: set[str] = set()
+
+    if isinstance(raw_targets, list):
+        for entry in raw_targets:
+            if not isinstance(entry, dict):
+                continue
+            key = entry.get("key")
+            normalized = {
+                "key": key or f"provider-{len(merged)+1}",
+                "label": entry.get("label") or ("Sync.com" if key == "sync" else "Cloud"),
+                "uploads_url": entry.get("uploads_url"),
+                "saves_url": entry.get("saves_url"),
+            }
+            merged.append(normalized)
+            if key:
+                seen_keys.add(key)
+
+    env_sync_uploads = os.getenv("SYNC_UPLOADS_URL")
+    env_sync_saves = os.getenv("SYNC_SAVES_URL")
+    if env_sync_uploads or env_sync_saves:
+        if "sync" in seen_keys:
+            for entry in merged:
+                if entry.get("key") == "sync":
+                    entry.setdefault("label", "Sync.com")
+                    entry["uploads_url"] = entry.get("uploads_url") or env_sync_uploads
+                    entry["saves_url"] = entry.get("saves_url") or env_sync_saves
+                    break
+        else:
+            merged.append(
+                {
+                    "key": "sync",
+                    "label": "Sync.com",
+                    "uploads_url": env_sync_uploads,
+                    "saves_url": env_sync_saves,
+                }
+            )
+
+    return merged
+
+
+def _compose_cloud_manifest(payload: dict) -> dict:
+    """Return a shallow copy of the cached manifest with merged targets."""
+
+    manifest = deepcopy(payload)
+    manifest["targets"] = _merge_cloud_targets(payload.get("_raw_targets"))
+    return manifest
+
+
+def _fetch_cloud_manifest(previous: dict | None) -> dict:
+    """Retrieve the Sync.com manifest and gracefully fall back on failure."""
+
+    manifest_url = os.getenv("SYNC_MANIFEST_URL")
+    timeout = float(os.getenv("SYNC_MANIFEST_TIMEOUT", "6"))
+
+    if not manifest_url:
+        manifest = _empty_cloud_manifest("SYNC_MANIFEST_URL is not configured.")
+        manifest["_raw_targets"] = []
+        return manifest
+
+    try:
+        req = urllib_request.Request(
+            manifest_url,
+            headers={"Accept": "application/json"},
+        )
+        with urllib_request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+        text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+        payload = json.loads(text or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+    except (urllib_error.HTTPError, urllib_error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        fallback = _empty_cloud_manifest(str(exc))
+        if previous:
+            fallback.update({
+                "uploads": previous.get("uploads", []),
+                "saves": previous.get("saves", []),
+                "source": previous.get("source"),
+                "fetched_at": previous.get("fetched_at"),
+                "_raw_targets": previous.get("_raw_targets", []),
+            })
+        return fallback
+
+    manifest = {
+        "uploads": payload.get("uploads") or [],
+        "saves": payload.get("saves") or [],
+        "source": manifest_url,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "error": None,
+        "_raw_targets": payload.get("targets") if isinstance(payload.get("targets"), list) else [],
+    }
+    return manifest
+
+
+def load_cloud_manifest(*, force_refresh: bool = False) -> dict:
+    """Return the cached Sync.com manifest, optionally bypassing the cache."""
+
+    cached = _CLOUD_MANIFEST_CACHE["data"]
+    if cached and not force_refresh:
+        return _compose_cloud_manifest(cached)
+
+    with _CLOUD_MANIFEST_LOCK:
+        cached = _CLOUD_MANIFEST_CACHE["data"]
+        if cached and not force_refresh:
+            return _compose_cloud_manifest(cached)
+
+        manifest = _fetch_cloud_manifest(cached)
+        _CLOUD_MANIFEST_CACHE["data"] = manifest
+        return _compose_cloud_manifest(manifest)
+
 # === テンプレート共通変数 ===
 @app.context_processor
 def inject_cloud_links():
@@ -119,11 +253,11 @@ def gallery():
     items = [{"id": k, **v} for k,v in db.items()]
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
     refresh = request.args.get("sync_refresh") == "1"
-    sync_manifest = get_sync_manifest(force_refresh=refresh)
+    cloud_manifest = load_cloud_manifest(force_refresh=refresh)
     return render_template(
         "gallery.html",
         items=items,
-        sync_uploads=sync_manifest.get("uploads", []),
+        sync_uploads=cloud_manifest.get("uploads", []),
         sync_refreshing=refresh,
     )
 
@@ -147,7 +281,8 @@ def index():
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
     refresh = request.args.get("sync_refresh") == "1"
-    cloud_manifest = get_sync_manifest(force_refresh=refresh)
+    cloud_manifest = load_cloud_manifest(force_refresh=refresh)
+    cloud_targets = cloud_manifest.get("targets", [])
 
     resp = make_response(render_template(
         "index.html",
@@ -156,6 +291,7 @@ def index():
         gallery_items=gallery_items,
         last_filename=last_filename,
         cloud_manifest=cloud_manifest,
+        cloud_targets=cloud_targets,
         sync_refreshing=refresh,
     ))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -379,7 +515,7 @@ def saves_list():
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
     refresh = request.args.get("sync_refresh") == "1"
-    sync_manifest = get_sync_manifest(force_refresh=refresh)
+    sync_manifest = load_cloud_manifest(force_refresh=refresh)
     return render_template(
         "saves.html",
         files=files,
