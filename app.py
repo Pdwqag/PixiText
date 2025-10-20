@@ -5,6 +5,8 @@ import re
 import time
 import mimetypes
 import threading
+import base64
+import binascii
 import importlib
 from datetime import datetime, timezone
 
@@ -70,17 +72,16 @@ app.config.update(
     SESSION_TYPE="filesystem",
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
-    BUILD_VER=24,  # キャッシュバスター
-    SYNC_UPLOADS_URL=os.getenv("SYNC_UPLOADS_URL", "https://ln5.sync.com/dl/6643d5940#v74nbenq-egdk7g8k-fnxm268q-a2qmhqnh"),
-    SYNC_SAVES_URL=os.getenv("SYNC_SAVES_URL", "https://ln5.sync.com/dl/09e74e690#7ufepdfq-nxtt4d66-y5pqdnsy-rvub53cy"),
+    BUILD_VER=25,  # キャッシュバスター
     GCS_PROJECT_ID=os.getenv("GCS_PROJECT_ID", "PixiText"),
     GCS_BUCKET_NAME=os.getenv("GCS_BUCKET_NAME", "pixitext-storage"),
     GCS_UPLOAD_PREFIX=os.getenv("GCS_UPLOAD_PREFIX", "uploads"),
     GCS_SAVES_PREFIX=os.getenv("GCS_SAVES_PREFIX", "saves"),
     GCS_SERVICE_ACCOUNT_KEY=os.getenv(
         "GCS_SERVICE_ACCOUNT_KEY",
-        os.path.join(BASE_DIR, "pixitext-475704-6c5d65f6c0cf.json"),
+        "",
     ),
+    GCS_SERVICE_ACCOUNT_JSON=os.getenv("GCS_SERVICE_ACCOUNT_JSON", ""),
     GCS_SERVICE_ACCOUNT_EMAIL=os.getenv(
         "GCS_SERVICE_ACCOUNT_EMAIL",
         "pikusaitekisuto@pixitext-475704.iam.gserviceaccount.com",
@@ -93,7 +94,7 @@ Session(app)
 
 
 _GCS_LOCK = threading.Lock()
-_GCS_STATE = {"bucket": None, "checked": False, "error": None}
+_GCS_STATE = {"bucket": None, "checked": False, "error": None, "config": None}
 _CLOUD_MANIFEST_CACHE = {"timestamp": 0.0, "value": None}
 _CLOUD_MANIFEST_LOCK = threading.Lock()
 
@@ -102,34 +103,135 @@ def _gcs_configured():
     return storage is not None and bool(app.config.get("GCS_BUCKET_NAME"))
 
 
+def _parse_service_account_blob(raw_value):
+    if not raw_value:
+        return None
+    if isinstance(raw_value, (bytes, bytearray)):
+        try:
+            raw_value = raw_value.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+    text = str(raw_value).strip()
+    if not text:
+        return None
+    if text.startswith("{"):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return None
+    try:
+        decoded = base64.b64decode(text)
+    except (binascii.Error, ValueError):
+        return None
+    try:
+        decoded_text = decoded.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    decoded_text = decoded_text.strip()
+    if not decoded_text.startswith("{"):
+        return None
+    try:
+        return json.loads(decoded_text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _fingerprint_credentials(kind, value):
+    if kind == "path":
+        return os.path.abspath(str(value))
+    if kind == "info":
+        try:
+            return json.dumps(value, sort_keys=True)
+        except TypeError:
+            return repr(value)
+    return None
+
+
+def _resolve_service_account_credentials():
+    inline = app.config.get("GCS_SERVICE_ACCOUNT_JSON")
+    info = _parse_service_account_blob(inline)
+    if info:
+        return "info", info
+
+    key_setting = app.config.get("GCS_SERVICE_ACCOUNT_KEY") or ""
+    expanded_path = os.path.expanduser(key_setting)
+    if expanded_path and os.path.isfile(expanded_path):
+        return "path", expanded_path
+
+    info = _parse_service_account_blob(key_setting)
+    if info:
+        return "info", info
+
+    env_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+    env_path = os.path.expanduser(env_path)
+    if env_path and os.path.isfile(env_path):
+        return "path", env_path
+
+    return None, None
+
+
 def _ensure_gcs_bucket(force=False):
     global _GCS_STATE
     if not _gcs_configured():
         return None
     with _GCS_LOCK:
-        if _GCS_STATE["bucket"] is not None and not force:
-            return _GCS_STATE["bucket"]
-        if _GCS_STATE["checked"] and _GCS_STATE["bucket"] is None and not force:
-            return None
-
         bucket_name = app.config.get("GCS_BUCKET_NAME")
         project_id = app.config.get("GCS_PROJECT_ID") or None
-        key_path = app.config.get("GCS_SERVICE_ACCOUNT_KEY")
+        cred_kind, cred_value = _resolve_service_account_credentials()
+        config_signature = (
+            bucket_name,
+            project_id,
+            cred_kind,
+            _fingerprint_credentials(cred_kind, cred_value),
+        )
+
+        if (
+            _GCS_STATE["bucket"] is not None
+            and not force
+            and _GCS_STATE.get("config") == config_signature
+        ):
+            return _GCS_STATE["bucket"]
+        if (
+            _GCS_STATE["checked"]
+            and _GCS_STATE["bucket"] is None
+            and not force
+            and _GCS_STATE.get("config") == config_signature
+        ):
+            return None
 
         try:
-            if key_path and os.path.exists(key_path):
-                client = storage.Client.from_service_account_json(key_path, project=project_id)
+            if cred_kind == "path" and cred_value:
+                client = storage.Client.from_service_account_json(
+                    cred_value,
+                    project=project_id,
+                )
+            elif cred_kind == "info" and cred_value:
+                client = storage.Client.from_service_account_info(
+                    dict(cred_value),
+                    project=project_id,
+                )
             else:
                 client = storage.Client(project=project_id)
 
             bucket = client.bucket(bucket_name)
-            client.get_bucket(bucket_name)
+            if not bucket.exists():  # pragma: no branch - requires network
+                bucket = client.get_bucket(bucket_name)
         except Exception as exc:  # pragma: no cover - relies on external service
             app.logger.warning("Google Cloud Storage is unavailable: %s", exc)
-            _GCS_STATE = {"bucket": None, "checked": True, "error": exc}
+            _GCS_STATE = {
+                "bucket": None,
+                "checked": True,
+                "error": exc,
+                "config": config_signature,
+            }
             return None
 
-        _GCS_STATE = {"bucket": bucket, "checked": True, "error": None}
+        _GCS_STATE = {
+            "bucket": bucket,
+            "checked": True,
+            "error": None,
+            "config": config_signature,
+        }
         return bucket
 
 
@@ -209,18 +311,6 @@ def _compose_browser_url(base_url, prefix):
 def _generate_cloud_manifest():
     targets = []
 
-    sync_uploads = app.config.get("SYNC_UPLOADS_URL")
-    sync_saves = app.config.get("SYNC_SAVES_URL")
-    if sync_uploads or sync_saves:
-        targets.append(
-            dict(
-                key="sync",
-                label="Sync.com",
-                uploads_url=sync_uploads or "",
-                saves_url=sync_saves or "",
-            )
-        )
-
     if _gcs_configured():
         bucket_name = app.config.get("GCS_BUCKET_NAME")
         base_url = app.config.get("GCS_BROWSER_BASE_URL")
@@ -282,10 +372,10 @@ def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWE
 def inject_cloud_links():
     manifest = load_cloud_manifest()
     return dict(
-        sync_uploads_url=app.config.get("SYNC_UPLOADS_URL"),
-        sync_saves_url=app.config.get("SYNC_SAVES_URL"),
         cloud_targets=manifest.get("targets", []),
         cloud_manifest=manifest,
+        gcs_upload_prefix=app.config.get("GCS_UPLOAD_PREFIX"),
+        gcs_saves_prefix=app.config.get("GCS_SAVES_PREFIX"),
     )
 
 
@@ -352,7 +442,7 @@ def index():
     gallery_items = [{"id": k, **v} for k, v in db.items()]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
-    refresh = request.args.get("sync_refresh") == "1"
+    refresh = request.args.get("cloud_refresh") == "1"
     cloud_manifest = load_cloud_manifest(force_refresh=refresh)
     cloud_targets = cloud_manifest.get("targets", [])
 
@@ -364,7 +454,6 @@ def index():
         last_filename=last_filename,
         cloud_manifest=cloud_manifest,
         cloud_targets=cloud_targets,
-        sync_refreshing=refresh,
     ))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
