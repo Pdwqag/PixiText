@@ -3,6 +3,11 @@ import json
 import random
 import re
 import time
+import mimetypes
+import threading
+import base64
+import binascii
+import importlib
 from datetime import datetime, timezone
 
 from flask import (
@@ -23,6 +28,19 @@ from flask_session import Session
 from werkzeug.utils import secure_filename
 
 from parser import parse_document, to_html_document
+
+storage = None
+NotFound = None
+
+_google_pkg = importlib.util.find_spec("google")
+if _google_pkg is not None:  # pragma: no branch - import resolution only
+    _storage_spec = importlib.util.find_spec("google.cloud.storage")
+    if _storage_spec is not None:
+        storage = importlib.import_module("google.cloud.storage")  # type: ignore[assignment]
+
+    _exceptions_spec = importlib.util.find_spec("google.api_core.exceptions")
+    if _exceptions_spec is not None:
+        NotFound = getattr(importlib.import_module("google.api_core.exceptions"), "NotFound", None)
 
 BASE_DIR = os.path.dirname(__file__)
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -54,13 +72,290 @@ app.config.update(
     SESSION_TYPE="filesystem",
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
-    BUILD_VER=24,  # キャッシュバスター
-    SYNC_UPLOADS_URL=os.getenv("SYNC_UPLOADS_URL", "https://ln5.sync.com/dl/6643d5940#v74nbenq-egdk7g8k-fnxm268q-a2qmhqnh"),
-    SYNC_SAVES_URL=os.getenv("SYNC_SAVES_URL", "https://ln5.sync.com/dl/09e74e690#7ufepdfq-nxtt4d66-y5pqdnsy-rvub53cy"),
+    BUILD_VER=25,  # キャッシュバスター
+    GCS_PROJECT_ID=os.getenv("GCS_PROJECT_ID", "PixiText"),
+    GCS_BUCKET_NAME=os.getenv("GCS_BUCKET_NAME", "pixitext-storage"),
+    GCS_UPLOAD_PREFIX=os.getenv("GCS_UPLOAD_PREFIX", "uploads"),
+    GCS_SAVES_PREFIX=os.getenv("GCS_SAVES_PREFIX", "saves"),
+    GCS_SERVICE_ACCOUNT_KEY=os.getenv(
+        "GCS_SERVICE_ACCOUNT_KEY",
+        os.path.join(BASE_DIR, "pixitext-475704-6c5d65f6c0cf.json"),
+    ),
+    GCS_SERVICE_ACCOUNT_JSON=os.getenv("GCS_SERVICE_ACCOUNT_JSON", ""),
+    GCS_SERVICE_ACCOUNT_EMAIL=os.getenv(
+        "GCS_SERVICE_ACCOUNT_EMAIL",
+        "pikusaitekisuto@pixitext-475704.iam.gserviceaccount.com",
+    ),
+    GCS_BROWSER_BASE_URL=os.getenv("GCS_BROWSER_BASE_URL", ""),
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
 Session(app)
+
+
+_GCS_LOCK = threading.Lock()
+_GCS_STATE = {"bucket": None, "checked": False, "error": None, "config": None}
+_CLOUD_MANIFEST_CACHE = {"timestamp": 0.0, "value": None}
+_CLOUD_MANIFEST_LOCK = threading.Lock()
+
+
+def _gcs_configured():
+    return storage is not None and bool(app.config.get("GCS_BUCKET_NAME"))
+
+
+def _parse_service_account_blob(raw_value):
+    if not raw_value:
+        return None
+    if isinstance(raw_value, (bytes, bytearray)):
+        try:
+            raw_value = raw_value.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+    text = str(raw_value).strip()
+    if not text:
+        return None
+    if text.startswith("{"):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return None
+    try:
+        decoded = base64.b64decode(text)
+    except (binascii.Error, ValueError):
+        return None
+    try:
+        decoded_text = decoded.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    decoded_text = decoded_text.strip()
+    if not decoded_text.startswith("{"):
+        return None
+    try:
+        return json.loads(decoded_text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _fingerprint_credentials(kind, value):
+    if kind == "path":
+        return os.path.abspath(str(value))
+    if kind == "info":
+        try:
+            return json.dumps(value, sort_keys=True)
+        except TypeError:
+            return repr(value)
+    return None
+
+
+def _resolve_service_account_credentials():
+    inline = app.config.get("GCS_SERVICE_ACCOUNT_JSON")
+    info = _parse_service_account_blob(inline)
+    if info:
+        return "info", info
+
+    key_setting = app.config.get("GCS_SERVICE_ACCOUNT_KEY") or ""
+    expanded_path = os.path.expanduser(key_setting)
+    if expanded_path and os.path.isfile(expanded_path):
+        return "path", expanded_path
+
+    info = _parse_service_account_blob(key_setting)
+    if info:
+        return "info", info
+
+    env_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+    env_path = os.path.expanduser(env_path)
+    if env_path and os.path.isfile(env_path):
+        return "path", env_path
+
+    return None, None
+
+
+def _ensure_gcs_bucket(force=False):
+    global _GCS_STATE
+    if not _gcs_configured():
+        return None
+    with _GCS_LOCK:
+        bucket_name = app.config.get("GCS_BUCKET_NAME")
+        project_id = app.config.get("GCS_PROJECT_ID") or None
+        cred_kind, cred_value = _resolve_service_account_credentials()
+        config_signature = (
+            bucket_name,
+            project_id,
+            cred_kind,
+            _fingerprint_credentials(cred_kind, cred_value),
+        )
+
+        if (
+            _GCS_STATE["bucket"] is not None
+            and not force
+            and _GCS_STATE.get("config") == config_signature
+        ):
+            return _GCS_STATE["bucket"]
+        if (
+            _GCS_STATE["checked"]
+            and _GCS_STATE["bucket"] is None
+            and not force
+            and _GCS_STATE.get("config") == config_signature
+        ):
+            return None
+
+        try:
+            if cred_kind == "path" and cred_value:
+                client = storage.Client.from_service_account_json(
+                    cred_value,
+                    project=project_id,
+                )
+            elif cred_kind == "info" and cred_value:
+                client = storage.Client.from_service_account_info(
+                    dict(cred_value),
+                    project=project_id,
+                )
+            else:
+                client = storage.Client(project=project_id)
+
+            bucket = client.bucket(bucket_name)
+            if not bucket.exists():  # pragma: no branch - requires network
+                bucket = client.get_bucket(bucket_name)
+        except Exception as exc:  # pragma: no cover - relies on external service
+            app.logger.warning("Google Cloud Storage is unavailable: %s", exc)
+            _GCS_STATE = {
+                "bucket": None,
+                "checked": True,
+                "error": exc,
+                "config": config_signature,
+            }
+            return None
+
+        _GCS_STATE = {
+            "bucket": bucket,
+            "checked": True,
+            "error": None,
+            "config": config_signature,
+        }
+        return bucket
+
+
+def _gcs_build_remote_path(prefix, filename):
+    safe_name = os.path.basename(filename or "")
+    if not safe_name:
+        return ""
+    prefix = (prefix or "").strip("/")
+    if prefix:
+        return f"{prefix}/{safe_name}"
+    return safe_name
+
+
+def gcs_upload_file(local_path, filename, *, prefix=None, content_type=None):
+    bucket = _ensure_gcs_bucket()
+    if bucket is None:
+        return None
+
+    if not filename:
+        return None
+
+    remote_path = _gcs_build_remote_path(prefix, filename)
+    if not remote_path:
+        return None
+
+    try:
+        blob = bucket.blob(remote_path)
+        blob.upload_from_filename(local_path, content_type=content_type)
+        return True
+    except Exception as exc:  # pragma: no cover - relies on external service
+        app.logger.warning(
+            "Failed to upload %s to Google Cloud Storage: %s",
+            remote_path,
+            exc,
+        )
+        return False
+
+
+def gcs_delete_blob(filename, *, prefix=None):
+    bucket = _ensure_gcs_bucket()
+    if bucket is None:
+        return None
+
+    if not filename:
+        return None
+
+    remote_path = _gcs_build_remote_path(prefix, filename)
+    if not remote_path:
+        return None
+    try:
+        blob = bucket.blob(remote_path)
+        blob.delete()
+        return True
+    except Exception as exc:  # pragma: no cover - relies on external service
+        if NotFound is not None and isinstance(exc, NotFound):
+            return True
+        app.logger.warning(
+            "Failed to delete %s from Google Cloud Storage: %s",
+            remote_path,
+            exc,
+        )
+        return False
+
+
+def _compose_browser_url(base_url, prefix):
+    if not base_url:
+        return ""
+    base = base_url.rstrip("/")
+    if not prefix:
+        return base
+    segment = (prefix or "").strip("/")
+    if not segment:
+        return base
+    return f"{base}/{segment}"
+
+
+def _generate_cloud_manifest():
+    targets = []
+
+    if _gcs_configured():
+        bucket_name = app.config.get("GCS_BUCKET_NAME")
+        base_url = app.config.get("GCS_BROWSER_BASE_URL")
+        if not base_url and bucket_name:
+            base_url = f"https://console.cloud.google.com/storage/browser/{bucket_name}"
+        targets.append(
+            dict(
+                key="gcs",
+                label="Google Cloud Storage",
+                uploads_url=_compose_browser_url(base_url, app.config.get("GCS_UPLOAD_PREFIX")),
+                saves_url=_compose_browser_url(base_url, app.config.get("GCS_SAVES_PREFIX")),
+                bucket=bucket_name or "",
+                project=app.config.get("GCS_PROJECT_ID") or "",
+                service_account=app.config.get("GCS_SERVICE_ACCOUNT_EMAIL") or "",
+            )
+        )
+
+    return {
+        "targets": targets,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "gcs": {
+            "enabled": _gcs_configured(),
+            "bucket": app.config.get("GCS_BUCKET_NAME"),
+            "project": app.config.get("GCS_PROJECT_ID"),
+            "service_account": app.config.get("GCS_SERVICE_ACCOUNT_EMAIL"),
+        },
+    }
+
+
+def load_cloud_manifest(*, force_refresh=False):
+    now = time.time()
+    with _CLOUD_MANIFEST_LOCK:
+        cached = _CLOUD_MANIFEST_CACHE["value"]
+        if (
+            cached is not None
+            and not force_refresh
+            and now - _CLOUD_MANIFEST_CACHE["timestamp"] < 30
+        ):
+            return cached
+
+    manifest = _generate_cloud_manifest()
+    with _CLOUD_MANIFEST_LOCK:
+        _CLOUD_MANIFEST_CACHE["timestamp"] = now
+        _CLOUD_MANIFEST_CACHE["value"] = manifest
+    return manifest
 
 
 @app.after_request
@@ -75,32 +370,12 @@ def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWE
 # === テンプレート共通変数 ===
 @app.context_processor
 def inject_cloud_links():
-    providers = []
-
-    def _provider(key, label, uploads_url, saves_url):
-        if not uploads_url and not saves_url:
-            return None
-        return dict(
-            key=key,
-            label=label,
-            uploads_url=uploads_url or "",
-            saves_url=saves_url or "",
-        )
-
-    sync = _provider(
-        "sync",
-        "Sync.com",
-        app.config.get("SYNC_UPLOADS_URL"),
-        app.config.get("SYNC_SAVES_URL"),
-    )
-    for entry in (sync,):
-        if entry:
-            providers.append(entry)
-
+    manifest = load_cloud_manifest()
     return dict(
-        sync_uploads_url=app.config.get("SYNC_UPLOADS_URL"),
-        sync_saves_url=app.config.get("SYNC_SAVES_URL"),
-        cloud_targets=providers,
+        cloud_targets=manifest.get("targets", []),
+        cloud_manifest=manifest,
+        gcs_upload_prefix=app.config.get("GCS_UPLOAD_PREFIX"),
+        gcs_saves_prefix=app.config.get("GCS_SAVES_PREFIX"),
     )
 
 
@@ -167,7 +442,7 @@ def index():
     gallery_items = [{"id": k, **v} for k, v in db.items()]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
 
-    refresh = request.args.get("sync_refresh") == "1"
+    refresh = request.args.get("cloud_refresh") == "1"
     cloud_manifest = load_cloud_manifest(force_refresh=refresh)
     cloud_targets = cloud_manifest.get("targets", [])
 
@@ -179,7 +454,6 @@ def index():
         last_filename=last_filename,
         cloud_manifest=cloud_manifest,
         cloud_targets=cloud_targets,
-        sync_refreshing=refresh,
     ))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
@@ -221,6 +495,16 @@ def upload():
     stored_name = candidate
     path = os.path.join(app.config["UPLOAD_FOLDER"], stored_name)
     file.save(path)
+
+    mime_type = mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
+    gcs_result = gcs_upload_file(
+        path,
+        stored_name,
+        prefix=app.config.get("GCS_UPLOAD_PREFIX"),
+        content_type=mime_type,
+    )
+    if gcs_result is False:
+        flash("クラウドバックアップ（Google Cloud Storage）に失敗しました。設定を確認してください。")
 
     # DB登録
     db[nid] = {
@@ -295,6 +579,13 @@ def delete_image(img_id):
     except Exception as e:
         flash(f"ファイル削除時にエラー: {e}")
 
+    gcs_result = gcs_delete_blob(
+        rec.get("stored_name"),
+        prefix=app.config.get("GCS_UPLOAD_PREFIX"),
+    )
+    if gcs_result is False:
+        flash("クラウドバックアップ（Google Cloud Storage）の削除に失敗しました。")
+
     # DB から削除して保存
     db.pop(img_id, None)
     _save_db(db)
@@ -340,6 +631,17 @@ def saves_delete():
             flash("ファイルが見つかりません")
     except Exception as e:
         flash(f"削除に失敗しました: {e}")
+        remove_remote = False
+    else:
+        remove_remote = True
+
+    if remove_remote:
+        gcs_result = gcs_delete_blob(
+            fname,
+            prefix=app.config.get("GCS_SAVES_PREFIX"),
+        )
+        if gcs_result is False:
+            flash("クラウドバックアップ（Google Cloud Storage）の削除に失敗しました。")
     return redirect(url_for("saves_list"))
 
 @app.route("/save_local", methods=["POST"])
@@ -365,7 +667,22 @@ def save_local():
             f.write(text)
         session["last_text"] = text
         session["last_filename"] = name
-        return jsonify(success=True, message=f"「{name}」を保存しました", filename=name)
+        payload = dict(
+            success=True,
+            message=f"「{name}」を保存しました",
+            filename=name,
+        )
+        gcs_result = gcs_upload_file(
+            path,
+            name,
+            prefix=app.config.get("GCS_SAVES_PREFIX"),
+            content_type="text/plain; charset=utf-8",
+        )
+        if gcs_result:
+            payload["cloud_synced"] = True
+        elif gcs_result is False:
+            payload["cloud_warning"] = "Google Cloud Storage へのバックアップに失敗しました。設定を確認してください。"
+        return jsonify(**payload)
     except Exception as e:
         return jsonify(success=False, message=f"保存に失敗：{e}"), 500
 

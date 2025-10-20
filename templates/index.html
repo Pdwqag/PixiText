@@ -139,17 +139,15 @@
     <p class="empty-hint">まだ画像がありません。上のフォームからアップロードしてください。</p>
   {% endif %}
 
-  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
-</section>
-{% endif %}
+  </section>
 
-{% if cloud_targets %}
+  {% if cloud_targets %}
 <section class="panel panel--cloud" id="cloud-mirror">
   <header class="panel-heading">
     <div class="panel-heading__text">
       <span class="panel-kicker">Cloud Mirror</span>
       <h2 class="panel-title">クラウドバックアップ</h2>
-      <p class="panel-description">Sync.com へ手動でバックアップするためのガイドです。以下の手順に従って共有フォルダを整備してください。</p>
+      <p class="panel-description">Google Cloud Storage 上のミラーフォルダへ素早くアクセスできます。バックアップの確認や共有権限の調整に活用してください。</p>
     </div>
   </header>
 
@@ -158,7 +156,7 @@
       {% if provider.uploads_url %}
         <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="uploads">
           <h3 class="cloud-link-card__title">{{ provider.label }} 挿絵アップロード</h3>
-          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのミラーです。別デバイスから素材を取り込む際やバックアップの整合性確認に活用してください。</p>
+          <p class="cloud-link-card__text"><code>uploads/</code> ディレクトリのバックアップです。別デバイスから素材を取り込む際や履歴の確認にご利用ください。</p>
           <a class="link-button subtle" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
         </article>
       {% endif %}
@@ -166,26 +164,26 @@
       {% if provider.saves_url %}
         <article class="cloud-link-card" data-provider="{{ provider.key }}" data-section="saves">
           <h3 class="cloud-link-card__title">{{ provider.label }} テキスト保存</h3>
-          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてクラウド側で履歴管理や共有設定を追加してください。</p>
+          <p class="cloud-link-card__text"><code>saves/</code> ディレクトリの原稿バックアップです。必要に応じてアクセス権やバージョン管理を設定してください。</p>
           <a class="link-button subtle" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a>
         </article>
       {% endif %}
     {% endfor %}
   </div>
 
-  {% if cloud_targets|selectattr('key', 'equalto', 'sync')|list %}
+  {% if cloud_manifest.gcs.enabled %}
     <div class="cloud-note cloud-note--accent">
-      <p><strong>Sync.com に向けて用意するもの</strong></p>
+      <p><strong>Google Cloud Storage 接続情報</strong></p>
       <ul>
-        <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> にアクセスできる Sync.com アカウント。</li>
-        <li>挿絵を格納するための共有フォルダ <code>uploads</code>。</li>
-        <li>テキスト原稿を格納するための共有フォルダ <code>saves</code>。</li>
-        <li>それぞれのフォルダから取得した共有リンク（このパネルのショートカットに登録すると便利です）。</li>
+        <li>プロジェクト ID: <code>{{ cloud_manifest.gcs.project }}</code></li>
+        <li>バケット名: <code>{{ cloud_manifest.gcs.bucket }}</code></li>
+        <li>サービスアカウント: <code>{{ cloud_manifest.gcs.service_account }}</code></li>
       </ul>
+      <p>サービスアカウントに対象バケットへの書き込み権限があるか、Render 等のデプロイ環境に資格情報が配置されているかをご確認ください。</p>
     </div>
+  {% else %}
+    <p class="cloud-note">クラウドバックアップを有効化するには、環境変数で Google Cloud Storage の資格情報とバケット名を設定してください。</p>
   {% endif %}
-
-  <p class="cloud-note">リンク先は共有フォルダです。サービス側の管理画面からアクセス権や同期設定を調整してください。</p>
 </section>
 {% endif %}
 
