@@ -1,14 +1,32 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>保存済みテキスト一覧</h2>
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Draft Archive</span>
+      <h2 class="panel-title">保存済みテキスト一覧</h2>
+      <p class="panel-description">ローカルディスクに保存されたテキストファイルの一覧です。必要なデータを編集・削除し、執筆フローを整えましょう。</p>
+    </div>
+    <div class="panel-actions">
+      <a class="link-button subtle" href="{{ url_for('index') }}">← エディタに戻る</a>
+    </div>
+  </header>
 
-  <p style="margin-bottom:12px;">
-    <a class="back-button" href="{{ url_for('index') }}"><span class="icon">エディタに戻る</span></a>
-  </p>
+  {% if cloud_targets %}
+    <div class="cloud-callout-stack">
+      {% for provider in cloud_targets %}
+        {% if provider.saves_url %}
+          <div class="cloud-callout" role="note">
+            <span class="cloud-callout__badge">{{ provider.label }}</span>
+            <p class="cloud-callout__text">クラウドミラー済みのフォルダを用意しています。<a href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
 
   {% if files %}
-    <div class="mg-grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">
+    <div class="mg-grid mg-grid-wide">
       {% for f in files %}
         <div class="mg-card">
           <div class="mg-body">
@@ -40,7 +58,17 @@
       {% endfor %}
     </div>
   {% else %}
-    <p style="opacity:.8;">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
+    <p class="empty-hint">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
   {% endif %}
+
+  <div class="panel-divider"></div>
+  <section class="cloud-note cloud-note--accent" aria-label="Sync.com 保存ガイド">
+    <p><strong>Sync.com 用に準備しておきたいもの</strong></p>
+    <ul>
+      <li>原稿を置く共有フォルダ <code>saves</code> と、その共有リンク。</li>
+      <li>同期対象となる最新のテキストファイル（例：<code>.txt</code>）。</li>
+      <li>必要に応じてアクセス権や履歴管理を調整できる Sync.com 管理者。</li>
+    </ul>
+  </section>
 </section>
 {% endblock %}
