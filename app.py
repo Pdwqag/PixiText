@@ -4,22 +4,23 @@ import os, json, random, time, re, threading
 from copy import deepcopy
 from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, flash, session, abort, jsonify, make_response
 from werkzeug.utils import secure_filename
+
 from parser import parse_document, to_html_document
 from datetime import datetime, timezone
 from urllib import request as urllib_request, error as urllib_error
 from flask_session import Session
 
-BASE_DIR      = os.path.dirname(__file__)
+BASE_DIR = os.path.dirname(__file__)
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-STATIC_DIR    = os.path.join(BASE_DIR, "static")
-UPLOAD_DIR    = os.path.join(BASE_DIR, "uploads")
-SAVES_DIR     = os.path.join(BASE_DIR, "saves")
-SESSION_DIR   = os.path.join(BASE_DIR, "flask_session")
-DB_PATH       = os.path.join(UPLOAD_DIR, "uploads.json")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+SAVES_DIR = os.path.join(BASE_DIR, "saves")
+SESSION_DIR = os.path.join(BASE_DIR, "flask_session")
+DB_PATH = os.path.join(UPLOAD_DIR, "uploads.json")
 
 # 必要なディレクトリは必ず作成
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(SAVES_DIR,  exist_ok=True)
+os.makedirs(SAVES_DIR, exist_ok=True)
 os.makedirs(SESSION_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
@@ -29,7 +30,7 @@ app = Flask(
     __name__,
     static_url_path="/static",
     static_folder=STATIC_DIR,
-    template_folder=TEMPLATES_DIR
+    template_folder=TEMPLATES_DIR,
 )
 
 # 2) 設定をまとめて投入（重複を避ける）
@@ -53,24 +54,47 @@ app.config.update(
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
 Session(app)
 
+
 @app.after_request
 def _no_cache_static_css(resp):
-    try:
-        from flask import request
-        if request.path.endswith('/static/style.css'):
-            resp.headers['Cache-Control'] = 'no-store'
-    except Exception:
-        pass
+    if request.path.endswith("/static/style.css"):
+        resp.headers["Cache-Control"] = "no-store"
     return resp
-
-sess_dir = os.path.join(BASE_DIR, "flask_session")
-os.makedirs(sess_dir, exist_ok=True) 
-app.config['SESSION_FILE_DIR'] = sess_dir
-
-Session(app)
 
 
 def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
+
+# === テンプレート共通変数 ===
+@app.context_processor
+def inject_cloud_links():
+    providers = []
+
+    def _provider(key, label, uploads_url, saves_url):
+        if not uploads_url and not saves_url:
+            return None
+        return dict(
+            key=key,
+            label=label,
+            uploads_url=uploads_url or "",
+            saves_url=saves_url or "",
+        )
+
+    sync = _provider(
+        "sync",
+        "Sync.com",
+        app.config.get("SYNC_UPLOADS_URL"),
+        app.config.get("SYNC_SAVES_URL"),
+    )
+    for entry in (sync,):
+        if entry:
+            providers.append(entry)
+
+    return dict(
+        sync_uploads_url=app.config.get("SYNC_UPLOADS_URL"),
+        sync_saves_url=app.config.get("SYNC_SAVES_URL"),
+        cloud_targets=providers,
+    )
+
 
 
 # === Sync.com manifest utilities ==========================================
