@@ -82,6 +82,20 @@
   <footer class="site-footer">
     <div class="container site-footer__inner">
       <small>© You — 個人利用専用</small>
+
+      {% if cloud_targets %}
+        <div class="site-footer__links" aria-label="クラウドミラー">
+          {% for provider in cloud_targets %}
+            {% if provider.uploads_url %}
+              <a class="site-footer__link" href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} アップロード</a>
+            {% endif %}
+            {% if provider.saves_url %}
+              <a class="site-footer__link" href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} テキスト保存</a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+
       <span class="site-footer__note">PixiText v{{ config.get('BUILD_VER', 1) }}</span>
     </div>
   </footer>

@@ -12,6 +12,19 @@
     </div>
   </header>
 
+  {% if cloud_targets %}
+    <div class="cloud-callout-stack">
+      {% for provider in cloud_targets %}
+        {% if provider.saves_url %}
+          <div class="cloud-callout" role="note">
+            <span class="cloud-callout__badge">{{ provider.label }}</span>
+            <p class="cloud-callout__text">クラウドミラー済みのフォルダを用意しています。<a href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
   {% if files %}
     <div class="mg-grid mg-grid-wide">
       {% for f in files %}
@@ -50,12 +63,12 @@
 
   <div class="panel-divider"></div>
   <section class="cloud-note cloud-note--accent" aria-label="Sync.com 保存ガイド">
-    <p><strong>Sync.com に保存ファイルを集約するには</strong></p>
-    <ol>
-      <li><a href="https://cp.sync.com/files" target="_blank" rel="noopener">cp.sync.com/files</a> で <code>saves</code> フォルダを作成し、共有リンクを準備します。</li>
-      <li>ここで書き出したテキスト（例：<code>.txt</code>）を Sync.com の <code>saves</code> フォルダにアップロードしてバックアップを更新します。</li>
-      <li>（任意）<a href="{{ url_for('sync_manifest_export') }}">ローカルからマニフェストを生成</a>し、Sync.com にアップロードするとクラウド側で管理台帳として利用できます。</li>
-    </ol>
+    <p><strong>Sync.com 用に準備しておきたいもの</strong></p>
+    <ul>
+      <li>原稿を置く共有フォルダ <code>saves</code> と、その共有リンク。</li>
+      <li>同期対象となる最新のテキストファイル（例：<code>.txt</code>）。</li>
+      <li>必要に応じてアクセス権や履歴管理を調整できる Sync.com 管理者。</li>
+    </ul>
   </section>
 </section>
 {% endblock %}
