@@ -178,6 +178,19 @@
         <li>プロジェクト ID: <code>{{ cloud_manifest.gcs.project }}</code></li>
         <li>バケット名: <code>{{ cloud_manifest.gcs.bucket }}</code></li>
         <li>サービスアカウント: <code>{{ cloud_manifest.gcs.service_account }}</code></li>
+        {% set creds = cloud_manifest.gcs.credentials %}
+        {% if creds.source %}
+          <li>資格情報ソース: <code>{{ creds.source }}</code>{% if creds.path %} (<code>{{ creds.path }}</code>){% endif %}</li>
+        {% endif %}
+        {% if creds.env_path %}
+          <li>GOOGLE_APPLICATION_CREDENTIALS: <code>{{ creds.env_path }}</code>
+            {% if creds.env_path_exists %}
+              <span aria-label="credential path resolved" title="credential path resolved">✅</span>
+            {% else %}
+              <span aria-label="credential path missing" title="credential path missing">⚠️</span>
+            {% endif %}
+          </li>
+        {% endif %}
       </ul>
       <p>サービスアカウントに対象バケットへの書き込み権限があるか、Render 等のデプロイ環境に資格情報が配置されているかをご確認ください。</p>
     </div>

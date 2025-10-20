@@ -79,7 +79,7 @@ app.config.update(
     GCS_SAVES_PREFIX=os.getenv("GCS_SAVES_PREFIX", "saves"),
     GCS_SERVICE_ACCOUNT_KEY=os.getenv(
         "GCS_SERVICE_ACCOUNT_KEY",
-        "",
+        os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
     ),
     GCS_SERVICE_ACCOUNT_JSON=os.getenv("GCS_SERVICE_ACCOUNT_JSON", ""),
     GCS_SERVICE_ACCOUNT_EMAIL=os.getenv(
@@ -136,15 +136,61 @@ def _parse_service_account_blob(raw_value):
         return None
 
 
+def _normalize_path(path_value):
+    if not path_value:
+        return ""
+    return os.path.abspath(os.path.expanduser(str(path_value)))
+
+
 def _fingerprint_credentials(kind, value):
     if kind == "path":
-        return os.path.abspath(str(value))
+        return _normalize_path(value)
     if kind == "info":
         try:
             return json.dumps(value, sort_keys=True)
         except TypeError:
             return repr(value)
     return None
+
+
+def _describe_credentials(kind, value):
+    env_raw = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+    env_path = _normalize_path(env_raw)
+    env_exists = bool(env_path and os.path.isfile(env_path))
+    descriptor = {
+        "kind": kind or "",
+        "fingerprint": _fingerprint_credentials(kind, value) or "",
+        "source": "",
+        "path": "",
+        "available": bool(kind and value),
+        "env_path": env_path,
+        "env_path_exists": env_exists,
+    }
+
+    if kind == "path" and value:
+        path = _normalize_path(value)
+        descriptor["path"] = path
+        descriptor["available"] = bool(path and os.path.isfile(path))
+        config_path = _normalize_path(app.config.get("GCS_SERVICE_ACCOUNT_KEY") or "")
+        if env_path and path == env_path:
+            descriptor["source"] = "GOOGLE_APPLICATION_CREDENTIALS"
+        elif config_path and path == config_path:
+            descriptor["source"] = "GCS_SERVICE_ACCOUNT_KEY"
+        else:
+            descriptor["source"] = "file"
+    elif kind == "info" and value:
+        descriptor["source"] = (
+            "GCS_SERVICE_ACCOUNT_JSON"
+            if app.config.get("GCS_SERVICE_ACCOUNT_JSON")
+            else "inline-json"
+        )
+        descriptor["available"] = True
+    else:
+        if env_raw:
+            descriptor["source"] = "GOOGLE_APPLICATION_CREDENTIALS"
+        descriptor["available"] = False
+
+    return descriptor
 
 
 def _resolve_service_account_credentials():
@@ -154,7 +200,7 @@ def _resolve_service_account_credentials():
         return "info", info
 
     key_setting = app.config.get("GCS_SERVICE_ACCOUNT_KEY") or ""
-    expanded_path = os.path.expanduser(key_setting)
+    expanded_path = _normalize_path(key_setting)
     if expanded_path and os.path.isfile(expanded_path):
         return "path", expanded_path
 
@@ -162,8 +208,7 @@ def _resolve_service_account_credentials():
     if info:
         return "info", info
 
-    env_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
-    env_path = os.path.expanduser(env_path)
+    env_path = _normalize_path(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""))
     if env_path and os.path.isfile(env_path):
         return "path", env_path
 
@@ -316,6 +361,7 @@ def _generate_cloud_manifest():
         base_url = app.config.get("GCS_BROWSER_BASE_URL")
         if not base_url and bucket_name:
             base_url = f"https://console.cloud.google.com/storage/browser/{bucket_name}"
+        cred_kind, cred_value = _resolve_service_account_credentials()
         targets.append(
             dict(
                 key="gcs",
@@ -325,9 +371,11 @@ def _generate_cloud_manifest():
                 bucket=bucket_name or "",
                 project=app.config.get("GCS_PROJECT_ID") or "",
                 service_account=app.config.get("GCS_SERVICE_ACCOUNT_EMAIL") or "",
+                credentials=_describe_credentials(cred_kind, cred_value),
             )
         )
 
+    cred_kind, cred_value = _resolve_service_account_credentials()
     return {
         "targets": targets,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -336,6 +384,7 @@ def _generate_cloud_manifest():
             "bucket": app.config.get("GCS_BUCKET_NAME"),
             "project": app.config.get("GCS_PROJECT_ID"),
             "service_account": app.config.get("GCS_SERVICE_ACCOUNT_EMAIL"),
+            "credentials": _describe_credentials(cred_kind, cred_value),
         },
     }
 
