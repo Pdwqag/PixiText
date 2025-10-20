@@ -5,3 +5,4 @@ itsdangerous>=2
 gunicorn>=21
 Flask-Session==0.5.0
 requests>=2.31
+google-cloud-storage>=2.14
