@@ -316,26 +316,16 @@ def preview():
     )
 
 
-@app.route("/api/preview_page", methods=["GET", "POST"])
+@app.route("/api/preview_page")
 def api_preview_page():
-    payload = request.get_json(silent=True) or request.form or {}
-
-    if request.method == "POST":
-        text = payload.get("text", "")
-        writing_mode = payload.get("writing_mode", "horizontal")
-        session["last_text"] = text
-        session["last_writing_mode"] = writing_mode
-        p_param = payload.get("p")
-    else:
-        text = session.get("last_text", "")
-        writing_mode = session.get("last_writing_mode", "horizontal")
-        p_param = request.args.get("p")
+    text = session.get("last_text", "")
+    writing_mode = session.get("last_writing_mode", "horizontal")
 
     if not text:
         return jsonify(success=False, message="プレビューする文章がありません。"), 400
 
     try:
-        p = int(p_param or 1)
+        p = int(request.args.get("p", 1))
     except Exception:
         p = 1
 
