@@ -85,3 +85,50 @@ window.addEventListener('pageshow', (e) => {
     insertAtCursor(ta, btn.dataset.insert);
   });
 })();
+
+// --- 4) プレビュー送信前にエラーチェックしてトースト表示 ---
+(()=>{
+  async function requestPreview(fd){
+    const resp = await fetch('/api/preview_page', {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+    });
+
+    const data = await resp.json().catch(() => ({}));
+    return { resp, data };
+  }
+
+  document.addEventListener('submit', async (e)=>{
+    const form = e.target;
+    const submitter = e.submitter || document.activeElement;
+    const action = (submitter && submitter.formAction) || form.getAttribute('action') || '';
+    const isPreview = submitter && submitter.dataset.ajaxPreview !== undefined;
+
+    if (!isPreview || !/\/preview(\b|$)/.test(action)) return;
+
+    e.preventDefault();
+
+    const fd = new FormData(form);
+    if (submitter && submitter.name) {
+      fd.append(submitter.name, submitter.value || '');
+    }
+
+    try {
+      const { resp, data } = await requestPreview(fd);
+
+      if (resp.ok && data.success) {
+        const target = new URL(action, location.href);
+        target.searchParams.set('p', data.p || 1);
+        window.location.href = target.toString();
+        return;
+      }
+
+      const msg = data && data.message ? data.message : 'プレビューに失敗しました。';
+      window.showToast && window.showToast(msg);
+    } catch (err) {
+      window.showToast && window.showToast('プレビュー処理中にエラーが発生しました。');
+      console.error(err);
+    }
+  });
+})();
