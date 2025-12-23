@@ -5,9 +5,6 @@ import re
 import time
 import mimetypes
 import threading
-import base64
-import binascii
-import importlib
 from datetime import datetime, timezone
 
 from flask import (
@@ -31,16 +28,8 @@ from parser import parse_document, to_html_document
 
 storage = None
 NotFound = None
-
-_google_pkg = importlib.util.find_spec("google")
-if _google_pkg is not None:  # pragma: no branch - import resolution only
-    _storage_spec = importlib.util.find_spec("google.cloud.storage")
-    if _storage_spec is not None:
-        storage = importlib.import_module("google.cloud.storage")  # type: ignore[assignment]
-
-    _exceptions_spec = importlib.util.find_spec("google.api_core.exceptions")
-    if _exceptions_spec is not None:
-        NotFound = getattr(importlib.import_module("google.api_core.exceptions"), "NotFound", None)
+# Google Cloud Storage 関連のコードは一時的に無効化しています。
+# 旧実装では importlib で google.cloud.storage を動的ロードしていました。
 
 BASE_DIR = os.path.dirname(__file__)
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -73,338 +62,59 @@ app.config.update(
     SESSION_FILE_DIR=SESSION_DIR,
     SESSION_PERMANENT=False,
     BUILD_VER=25,  # キャッシュバスター
-    GCS_PROJECT_ID=os.getenv("GCS_PROJECT_ID", "PixiText"),
-    GCS_BUCKET_NAME=os.getenv("GCS_BUCKET_NAME", "pixitext-storage"),
-    GCS_UPLOAD_PREFIX=os.getenv("GCS_UPLOAD_PREFIX", "uploads"),
-    GCS_SAVES_PREFIX=os.getenv("GCS_SAVES_PREFIX", "saves"),
-    GCS_SERVICE_ACCOUNT_KEY=os.getenv(
-        "GCS_SERVICE_ACCOUNT_KEY",
-        os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
-    ),
-    GCS_SERVICE_ACCOUNT_JSON=os.getenv("GCS_SERVICE_ACCOUNT_JSON", ""),
-    GCS_SERVICE_ACCOUNT_EMAIL=os.getenv(
-        "GCS_SERVICE_ACCOUNT_EMAIL",
-        "pikusaitekisuto@pixitext-475704.iam.gserviceaccount.com",
-    ),
-    GCS_BROWSER_BASE_URL=os.getenv("GCS_BROWSER_BASE_URL", ""),
+    # Google Cloud Storage 連携は停止中。必要になったら環境変数を再度読み込む。
+    GCS_PROJECT_ID="",
+    GCS_BUCKET_NAME="",
+    GCS_UPLOAD_PREFIX="",
+    GCS_SAVES_PREFIX="",
+    GCS_SERVICE_ACCOUNT_KEY="",
+    GCS_SERVICE_ACCOUNT_JSON="",
+    GCS_SERVICE_ACCOUNT_EMAIL="",
+    GCS_BROWSER_BASE_URL="",
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
 Session(app)
 
 
-_GCS_LOCK = threading.Lock()
-_GCS_STATE = {"bucket": None, "checked": False, "error": None, "config": None}
 _CLOUD_MANIFEST_CACHE = {"timestamp": 0.0, "value": None}
 _CLOUD_MANIFEST_LOCK = threading.Lock()
 
 
-def _gcs_configured():
-    return storage is not None and bool(app.config.get("GCS_BUCKET_NAME"))
+def gcs_upload_file(local_path, filename, *, prefix=None, content_type=None):
+    """Google Cloud Storage 連携のスタブ。
 
+    旧実装では _ensure_gcs_bucket() 経由でアップロードしていましたが、
+    現在はクラウド連携を停止しているため何も行いません。
+    """
 
-def _parse_service_account_blob(raw_value):
-    if not raw_value:
-        return None
-    if isinstance(raw_value, (bytes, bytearray)):
-        try:
-            raw_value = raw_value.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-    text = str(raw_value).strip()
-    if not text:
-        return None
-    if text.startswith("{"):
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            return None
-    try:
-        decoded = base64.b64decode(text)
-    except (binascii.Error, ValueError):
-        return None
-    try:
-        decoded_text = decoded.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-    decoded_text = decoded_text.strip()
-    if not decoded_text.startswith("{"):
-        return None
-    try:
-        return json.loads(decoded_text)
-    except json.JSONDecodeError:
-        return None
-
-
-def _normalize_path(path_value):
-    if not path_value:
-        return ""
-    return os.path.abspath(os.path.expanduser(str(path_value)))
-
-
-def _fingerprint_credentials(kind, value):
-    if kind == "path":
-        return _normalize_path(value)
-    if kind == "info":
-        try:
-            return json.dumps(value, sort_keys=True)
-        except TypeError:
-            return repr(value)
+    # 旧実装参考:
+    # bucket = _ensure_gcs_bucket()
+    # if bucket is None:
+    #     return None
+    # remote_path = _gcs_build_remote_path(prefix, filename)
+    # blob = bucket.blob(remote_path)
+    # blob.upload_from_filename(local_path, content_type=content_type)
     return None
 
 
-def _describe_credentials(kind, value):
-    env_raw = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
-    env_path = _normalize_path(env_raw)
-    env_exists = bool(env_path and os.path.isfile(env_path))
-    descriptor = {
-        "kind": kind or "",
-        "fingerprint": _fingerprint_credentials(kind, value) or "",
-        "source": "",
-        "path": "",
-        "available": bool(kind and value),
-        "env_path": env_path,
-        "env_path_exists": env_exists,
-    }
-
-    if kind == "path" and value:
-        path = _normalize_path(value)
-        descriptor["path"] = path
-        descriptor["available"] = bool(path and os.path.isfile(path))
-        config_path = _normalize_path(app.config.get("GCS_SERVICE_ACCOUNT_KEY") or "")
-        if env_path and path == env_path:
-            descriptor["source"] = "GOOGLE_APPLICATION_CREDENTIALS"
-        elif config_path and path == config_path:
-            descriptor["source"] = "GCS_SERVICE_ACCOUNT_KEY"
-        else:
-            descriptor["source"] = "file"
-    elif kind == "info" and value:
-        descriptor["source"] = (
-            "GCS_SERVICE_ACCOUNT_JSON"
-            if app.config.get("GCS_SERVICE_ACCOUNT_JSON")
-            else "inline-json"
-        )
-        descriptor["available"] = True
-    else:
-        if env_raw:
-            descriptor["source"] = "GOOGLE_APPLICATION_CREDENTIALS"
-        descriptor["available"] = False
-
-    return descriptor
-
-
-def _resolve_service_account_credentials():
-    inline = app.config.get("GCS_SERVICE_ACCOUNT_JSON")
-    info = _parse_service_account_blob(inline)
-    if info:
-        return "info", info
-
-    key_setting = app.config.get("GCS_SERVICE_ACCOUNT_KEY") or ""
-    expanded_path = _normalize_path(key_setting)
-    if expanded_path and os.path.isfile(expanded_path):
-        return "path", expanded_path
-
-    info = _parse_service_account_blob(key_setting)
-    if info:
-        return "info", info
-
-    env_path = _normalize_path(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""))
-    if env_path and os.path.isfile(env_path):
-        return "path", env_path
-
-    return None, None
-
-
-def _ensure_gcs_bucket(force=False):
-    global _GCS_STATE
-    if not _gcs_configured():
-        return None
-    with _GCS_LOCK:
-        bucket_name = app.config.get("GCS_BUCKET_NAME")
-        project_id = app.config.get("GCS_PROJECT_ID") or None
-        cred_kind, cred_value = _resolve_service_account_credentials()
-        config_signature = (
-            bucket_name,
-            project_id,
-            cred_kind,
-            _fingerprint_credentials(cred_kind, cred_value),
-        )
-
-        if (
-            _GCS_STATE["bucket"] is not None
-            and not force
-            and _GCS_STATE.get("config") == config_signature
-        ):
-            return _GCS_STATE["bucket"]
-        if (
-            _GCS_STATE["checked"]
-            and _GCS_STATE["bucket"] is None
-            and not force
-            and _GCS_STATE.get("config") == config_signature
-        ):
-            return None
-
-        try:
-            if cred_kind == "path" and cred_value:
-                client = storage.Client.from_service_account_json(
-                    cred_value,
-                    project=project_id,
-                )
-            elif cred_kind == "info" and cred_value:
-                client = storage.Client.from_service_account_info(
-                    dict(cred_value),
-                    project=project_id,
-                )
-            else:
-                client = storage.Client(project=project_id)
-
-            bucket = client.bucket(bucket_name)
-            if not bucket.exists():  # pragma: no branch - requires network
-                bucket = client.get_bucket(bucket_name)
-        except Exception as exc:  # pragma: no cover - relies on external service
-            app.logger.warning("Google Cloud Storage is unavailable: %s", exc)
-            _GCS_STATE = {
-                "bucket": None,
-                "checked": True,
-                "error": exc,
-                "config": config_signature,
-            }
-            return None
-
-        _GCS_STATE = {
-            "bucket": bucket,
-            "checked": True,
-            "error": None,
-            "config": config_signature,
-        }
-        return bucket
-
-
-def _gcs_build_remote_path(prefix, filename):
-    safe_name = os.path.basename(filename or "")
-    if not safe_name:
-        return ""
-    prefix = (prefix or "").strip("/")
-    if prefix:
-        return f"{prefix}/{safe_name}"
-    return safe_name
-
-
-def gcs_upload_file(local_path, filename, *, prefix=None, content_type=None):
-    bucket = _ensure_gcs_bucket()
-    if bucket is None:
-        return None
-
-    if not filename:
-        return None
-
-    remote_path = _gcs_build_remote_path(prefix, filename)
-    if not remote_path:
-        return None
-
-    try:
-        blob = bucket.blob(remote_path)
-        blob.upload_from_filename(local_path, content_type=content_type)
-        return True
-    except Exception as exc:  # pragma: no cover - relies on external service
-        app.logger.warning(
-            "Failed to upload %s to Google Cloud Storage: %s",
-            remote_path,
-            exc,
-        )
-        return False
-
-
 def gcs_delete_blob(filename, *, prefix=None):
-    bucket = _ensure_gcs_bucket()
-    if bucket is None:
-        return None
+    """Google Cloud Storage 連携のスタブ (削除処理無効化)。"""
 
-    if not filename:
-        return None
-
-    remote_path = _gcs_build_remote_path(prefix, filename)
-    if not remote_path:
-        return None
-    try:
-        blob = bucket.blob(remote_path)
-        blob.delete()
-        return True
-    except Exception as exc:  # pragma: no cover - relies on external service
-        if NotFound is not None and isinstance(exc, NotFound):
-            return True
-        app.logger.warning(
-            "Failed to delete %s from Google Cloud Storage: %s",
-            remote_path,
-            exc,
-        )
-        return False
-
-
-def _compose_browser_url(base_url, prefix):
-    if not base_url:
-        return ""
-    base = base_url.rstrip("/")
-    if not prefix:
-        return base
-    segment = (prefix or "").strip("/")
-    if not segment:
-        return base
-    return f"{base}/{segment}"
-
-
-def _generate_cloud_manifest():
-    targets = []
-
-    if _gcs_configured():
-        bucket_name = app.config.get("GCS_BUCKET_NAME")
-        base_url = app.config.get("GCS_BROWSER_BASE_URL")
-        if not base_url and bucket_name:
-            base_url = f"https://console.cloud.google.com/storage/browser/{bucket_name}"
-        cred_kind, cred_value = _resolve_service_account_credentials()
-        targets.append(
-            dict(
-                key="gcs",
-                label="Google Cloud Storage",
-                uploads_url=_compose_browser_url(base_url, app.config.get("GCS_UPLOAD_PREFIX")),
-                saves_url=_compose_browser_url(base_url, app.config.get("GCS_SAVES_PREFIX")),
-                bucket=bucket_name or "",
-                project=app.config.get("GCS_PROJECT_ID") or "",
-                service_account=app.config.get("GCS_SERVICE_ACCOUNT_EMAIL") or "",
-                credentials=_describe_credentials(cred_kind, cred_value),
-            )
-        )
-
-    cred_kind, cred_value = _resolve_service_account_credentials()
-    return {
-        "targets": targets,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "gcs": {
-            "enabled": _gcs_configured(),
-            "bucket": app.config.get("GCS_BUCKET_NAME"),
-            "project": app.config.get("GCS_PROJECT_ID"),
-            "service_account": app.config.get("GCS_SERVICE_ACCOUNT_EMAIL"),
-            "credentials": _describe_credentials(cred_kind, cred_value),
-        },
-    }
+    # 旧実装参考:
+    # bucket = _ensure_gcs_bucket()
+    # blob = bucket.blob(remote_path)
+    # blob.delete()
+    return None
 
 
 def load_cloud_manifest(*, force_refresh=False):
-    now = time.time()
-    with _CLOUD_MANIFEST_LOCK:
-        cached = _CLOUD_MANIFEST_CACHE["value"]
-        if (
-            cached is not None
-            and not force_refresh
-            and now - _CLOUD_MANIFEST_CACHE["timestamp"] < 30
-        ):
-            return cached
-
-    manifest = _generate_cloud_manifest()
-    with _CLOUD_MANIFEST_LOCK:
-        _CLOUD_MANIFEST_CACHE["timestamp"] = now
-        _CLOUD_MANIFEST_CACHE["value"] = manifest
-    return manifest
+    """クラウド連携が無効なため、空のマニフェストを返す。"""
+    return {
+        "targets": [],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "gcs": {"enabled": False},
+    }
 
 
 @app.after_request
@@ -567,14 +277,38 @@ def upload():
     flash(f"アップロード完了: ID {nid}")
     return redirect(url_for("index"))  # アップ後は一覧へ
 
-@app.route("/preview", methods=["POST"])
+@app.route("/preview", methods=["GET", "POST"])
 def preview():
-    session['last_text'] = request.form.get("text","")
-    session['last_writing_mode'] = request.form.get("writing_mode","horizontal")
-    text = session['last_text']; writing_mode = session['last_writing_mode']
+    if request.method == "POST":
+        session['last_text'] = request.form.get("text","")
+        session['last_writing_mode'] = request.form.get("writing_mode","horizontal")
+        return redirect(url_for("preview", p=1))
+
+    text = session.get('last_text', "")
+    writing_mode = session.get('last_writing_mode', "horizontal")
+    if not text:
+        flash("プレビューする文章がありません。先に入力してください。")
+        return redirect(url_for("index"))
+
+    try:
+        p = int(request.args.get("p", 1))
+    except Exception:
+        p = 1
+
     pages = parse_document(text)
-    html = to_html_document(pages, writing_mode=writing_mode)
-    return render_template("preview.html", html=html, writing_mode=writing_mode)  # :contentReference[oaicite:4]{index=4}
+    total = len(pages)
+    p = max(1, min(total, p))
+    page = pages[p-1]
+    nums = list(range(1, total+1))
+    return render_template(
+        "preview.html",
+        page=page,
+        total=total,
+        p=p,
+        nums=nums,
+        writing_mode=writing_mode,
+        text=text,
+    )
 
 @app.route("/export", methods=["POST"])
 def export():
@@ -592,14 +326,15 @@ def export():
     with open(out_path, "w", encoding="utf-8") as f: f.write(html_doc)
     return send_file(out_path, as_attachment=True, download_name="export.html")
 
-@app.route("/read")
-def read_single():
+@app.route("/read", defaults={"p": None})
+@app.route("/read/<int:p>")
+def read_single(p):
     text = session.get("last_text", "")
     writing_mode = session.get("last_writing_mode", "horizontal")
     if not text:
         return redirect(url_for("index"))
     try:
-        p = int(request.args.get("p", "1"))
+        p = int(request.args.get("p", p or 1))
     except Exception:
         p = 1
     pages = parse_document(text)

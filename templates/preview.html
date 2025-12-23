@@ -10,12 +10,27 @@
     </div>
     <div class="panel-actions">
       <form method="post" action="{{ url_for('export') }}">
-        <input type="hidden" name="text" value="{{ request.form.get('text', '')|e }}">
+        <input type="hidden" name="text" value="{{ text|e }}">
         <input type="hidden" name="writing_mode" value="{{ writing_mode }}">
         <button type="submit">HTMLとして保存</button>
       </form>
     </div>
   </header>
-  <div class="rendered">{{ html|safe }}</div>
+  <div class="rendered">
+    <div class="document {{ writing_mode }}">
+      <section class="page single" id="page-{{p}}" data-index="{{p}}">
+        <div class="page-inner">{{ page.html|safe }}</div>
+      </section>
+    </div>
+  </div>
+  <div class="bottom-pager">
+    <div class="pager-center">
+      <a class="page-arrow prev" href="{{ url_for('preview', p=max(1, p-1)) }}">&lsaquo;</a>
+      {% for i in nums %}
+        <a class="page-number {% if i==p %}active{% endif %}" href="{{ url_for('preview', p=i) }}">{{ i }}</a>
+      {% endfor %}
+      <a class="page-arrow next" href="{{ url_for('preview', p=min(total, p+1)) }}">&rsaquo;</a>
+    </div>
+  </div>
 </section>
 {% endblock %}
