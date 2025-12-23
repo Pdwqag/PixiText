@@ -1,6 +1,5 @@
 import app
 
-
 def test_preview_requires_session_text_redirects_home():
     app.app.config["TESTING"] = True
     client = app.app.test_client()
@@ -60,3 +59,27 @@ def test_preview_api_reports_parse_errors(monkeypatch):
     assert resp.status_code == 400
     assert data["success"] is False
     assert "失敗" in data["message"]
+
+
+def test_preview_api_accepts_post_payload_and_sets_session(monkeypatch):
+    app.app.config["TESTING"] = True
+    client = app.app.test_client()
+
+    monkeypatch.setattr(app, "parse_document", lambda text: [{"html": text}])
+
+    resp = client.post(
+        "/api/preview_page",
+        data={"text": "hello", "writing_mode": "vertical", "p": 1},
+    )
+
+    data = resp.get_json()
+
+    assert resp.status_code == 200
+    assert data["success"] is True
+    assert data["page_html"] == "hello"
+    assert data["writing_mode"] == "vertical"
+
+    # セッションに保存され、プレビューへの遷移に使えることを確認
+    with client.session_transaction() as sess:
+        assert sess["last_text"] == "hello"
+        assert sess["last_writing_mode"] == "vertical"
