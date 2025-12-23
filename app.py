@@ -295,7 +295,12 @@ def preview():
     except Exception:
         p = 1
 
-    pages = parse_document(text)
+    try:
+        pages = parse_document(text)
+    except Exception as e:
+        flash(f"プレビュー生成に失敗しました: {e}")
+        return redirect(url_for("index"))
+
     total = len(pages)
     p = max(1, min(total, p))
     page = pages[p-1]
@@ -308,6 +313,37 @@ def preview():
         nums=nums,
         writing_mode=writing_mode,
         text=text,
+    )
+
+
+@app.route("/api/preview_page")
+def api_preview_page():
+    text = session.get("last_text", "")
+    writing_mode = session.get("last_writing_mode", "horizontal")
+
+    if not text:
+        return jsonify(success=False, message="プレビューする文章がありません。"), 400
+
+    try:
+        p = int(request.args.get("p", 1))
+    except Exception:
+        p = 1
+
+    try:
+        pages = parse_document(text)
+    except Exception as e:
+        return jsonify(success=False, message=f"プレビュー生成に失敗しました: {e}"), 400
+
+    total = len(pages) or 1
+    p = max(1, min(total, p))
+    page = pages[p - 1]
+
+    return jsonify(
+        success=True,
+        p=p,
+        total=total,
+        page_html=page.get("html", ""),
+        writing_mode=writing_mode,
     )
 
 @app.route("/export", methods=["POST"])
