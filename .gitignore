@@ -1,3 +1,4 @@
 __pycache__/
 *.pyc
 pixitext-475704-6c5d65f6c0cf.json
+flask_session/
