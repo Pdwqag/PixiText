@@ -9,6 +9,7 @@
       <p class="panel-description">書式や挿絵の表示を確認してから公開ステップへ進みましょう。</p>
     </div>
     <div class="panel-actions">
+      <a class="link-button" href="{{ url_for('read_single', p=1) }}">ページ送りで読む</a>
       <form method="post" action="{{ url_for('export') }}">
         <input type="hidden" name="text" value="{{ text|e }}">
         <input type="hidden" name="writing_mode" value="{{ writing_mode }}">
@@ -16,79 +17,21 @@
       </form>
     </div>
   </header>
-  <div class="rendered" id="preview-root" data-current="{{ p }}" data-total="{{ total }}" data-writing-mode="{{ writing_mode }}">
+  <div class="rendered">
     <div class="document {{ writing_mode }}">
       <section class="page single" id="page-{{p}}" data-index="{{p}}">
-        <div class="page-inner" id="preview-page-inner">{{ page.html|safe }}</div>
+        <div class="page-inner">{{ page.html|safe }}</div>
       </section>
     </div>
   </div>
-  <div class="bottom-pager" id="preview-pager">
+  <div class="bottom-pager">
     <div class="pager-center">
-      <a class="page-arrow prev" data-page="{{ prev_page }}" href="{{ url_for('preview', p=prev_page) }}">&lsaquo;</a>
+      <a class="page-arrow prev" href="{{ url_for('preview', p=max(1, p-1)) }}">&lsaquo;</a>
       {% for i in nums %}
-        <a class="page-number {% if i==p %}active{% endif %}" data-page="{{ i }}" href="{{ url_for('preview', p=i) }}">{{ i }}</a>
+        <a class="page-number {% if i==p %}active{% endif %}" href="{{ url_for('preview', p=i) }}">{{ i }}</a>
       {% endfor %}
-      <a class="page-arrow next" data-page="{{ next_page }}" href="{{ url_for('preview', p=next_page) }}">&rsaquo;</a>
+      <a class="page-arrow next" href="{{ url_for('preview', p=min(total, p+1)) }}">&rsaquo;</a>
     </div>
   </div>
-
-  <script>
-  (()=>{
-    const pager = document.getElementById('preview-pager');
-    const pageInner = document.getElementById('preview-page-inner');
-    const root = document.getElementById('preview-root');
-    const apiUrl = '{{ url_for('api_preview_page') }}';
-    if (!pager || !pageInner || !root) return;
-
-    function renderPager(data){
-      const center = pager.querySelector('.pager-center');
-      if (!center) return;
-      const prev = center.querySelector('.page-arrow.prev');
-      const next = center.querySelector('.page-arrow.next');
-      if (prev) { prev.dataset.page = data.prev_page; prev.href = `{{ url_for('preview') }}?p=${data.prev_page}`; }
-      if (next) { next.dataset.page = data.next_page; next.href = `{{ url_for('preview') }}?p=${data.next_page}`; }
-
-      center.querySelectorAll('a.page-number').forEach((a)=> a.remove());
-      const after = center.querySelector('.page-arrow.next');
-      data.nums.forEach((i)=>{
-        const a = document.createElement('a');
-        a.className = 'page-number' + (i === data.p ? ' active' : '');
-        a.dataset.page = i;
-        a.href = `{{ url_for('preview') }}?p=${i}`;
-        a.textContent = i;
-        center.insertBefore(a, after);
-      });
-    }
-
-    async function fetchPage(target){
-      try {
-        const res = await fetch(`${apiUrl}?p=${target}`, { headers: { 'Accept': 'application/json' } });
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        if (!data.success) throw new Error(data.message || '取得に失敗しました');
-
-        pageInner.innerHTML = data.page_html;
-        root.dataset.current = data.p;
-        root.dataset.total = data.total;
-        renderPager(data);
-        history.replaceState(null, '', `{{ url_for('preview') }}?p=${data.p}`);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } catch (err) {
-        console.error(err);
-        window.showToast && showToast('ページの読み込みに失敗しました');
-      }
-    }
-
-    pager.addEventListener('click', (e)=>{
-      const a = e.target.closest('a[data-page]');
-      if (!a) return;
-      const target = parseInt(a.dataset.page, 10);
-      if (!target || Number.isNaN(target)) return;
-      e.preventDefault();
-      fetchPage(target);
-    });
-  })();
-  </script>
 </section>
 {% endblock %}

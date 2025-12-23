@@ -279,11 +279,6 @@ def upload():
 
 @app.route("/preview", methods=["GET", "POST"])
 def preview():
-    """プレビュー画面の処理順序
-
-    1. POST: 入力フォームから本文と縦横書き設定を受け取り、セッションに保存したうえで1ページ目へリダイレクト。
-    2. GET: セッションから保存済みの本文・設定を読み込み、ページ番号クエリ(`p`)で該当ページを描画。
-    """
     if request.method == "POST":
         session['last_text'] = request.form.get("text","")
         session['last_writing_mode'] = request.form.get("writing_mode","horizontal")
@@ -305,55 +300,14 @@ def preview():
     p = max(1, min(total, p))
     page = pages[p-1]
     nums = list(range(1, total+1))
-    prev_page = max(1, p - 1)
-    next_page = min(total, p + 1)
     return render_template(
         "preview.html",
         page=page,
         total=total,
         p=p,
         nums=nums,
-        prev_page=prev_page,
-        next_page=next_page,
         writing_mode=writing_mode,
         text=text,
-    )
-
-
-@app.route("/api/preview_page")
-def api_preview_page():
-    """セッション上の本文を使ってページ情報をJSONで返す。"""
-
-    text = session.get("last_text", "")
-    writing_mode = session.get("last_writing_mode", "horizontal")
-
-    if not text:
-        return jsonify(success=False, message="プレビューできる文章がありません。"), 400
-
-    try:
-        p = int(request.args.get("p", 1))
-    except Exception:
-        p = 1
-
-    pages = parse_document(text)
-    total = len(pages)
-    if total == 0:
-        return jsonify(success=False, message="ページを生成できませんでした。"), 400
-
-    p = max(1, min(total, p))
-    page = pages[p - 1]
-    prev_page = max(1, p - 1)
-    next_page = min(total, p + 1)
-
-    return jsonify(
-        success=True,
-        p=p,
-        total=total,
-        prev_page=prev_page,
-        next_page=next_page,
-        nums=list(range(1, total + 1)),
-        page_html=page["html"],
-        writing_mode=writing_mode,
     )
 
 @app.route("/export", methods=["POST"])
