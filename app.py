@@ -300,16 +300,12 @@ def preview():
     p = max(1, min(total, p))
     page = pages[p-1]
     nums = list(range(1, total+1))
-    prev_page = max(1, p - 1)
-    next_page = min(total, p + 1)
     return render_template(
         "preview.html",
         page=page,
         total=total,
         p=p,
         nums=nums,
-        prev_page=prev_page,
-        next_page=next_page,
         writing_mode=writing_mode,
         text=text,
     )
