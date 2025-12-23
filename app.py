@@ -302,14 +302,15 @@ def export():
     with open(out_path, "w", encoding="utf-8") as f: f.write(html_doc)
     return send_file(out_path, as_attachment=True, download_name="export.html")
 
-@app.route("/read")
-def read_single():
+@app.route("/read", defaults={"p": None})
+@app.route("/read/<int:p>")
+def read_single(p):
     text = session.get("last_text", "")
     writing_mode = session.get("last_writing_mode", "horizontal")
     if not text:
         return redirect(url_for("index"))
     try:
-        p = int(request.args.get("p", "1"))
+        p = int(request.args.get("p", p or 1))
     except Exception:
         p = 1
     pages = parse_document(text)

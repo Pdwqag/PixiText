@@ -9,6 +9,7 @@
       <p class="panel-description">書式や挿絵の表示を確認してから公開ステップへ進みましょう。</p>
     </div>
     <div class="panel-actions">
+      <a class="link-button" href="{{ url_for('read_single', p=1) }}">ページ送りで読む</a>
       <form method="post" action="{{ url_for('export') }}">
         <input type="hidden" name="text" value="{{ request.form.get('text', '')|e }}">
         <input type="hidden" name="writing_mode" value="{{ writing_mode }}">
