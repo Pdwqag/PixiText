@@ -277,14 +277,38 @@ def upload():
     flash(f"アップロード完了: ID {nid}")
     return redirect(url_for("index"))  # アップ後は一覧へ
 
-@app.route("/preview", methods=["POST"])
+@app.route("/preview", methods=["GET", "POST"])
 def preview():
-    session['last_text'] = request.form.get("text","")
-    session['last_writing_mode'] = request.form.get("writing_mode","horizontal")
-    text = session['last_text']; writing_mode = session['last_writing_mode']
+    if request.method == "POST":
+        session['last_text'] = request.form.get("text","")
+        session['last_writing_mode'] = request.form.get("writing_mode","horizontal")
+        return redirect(url_for("preview", p=1))
+
+    text = session.get('last_text', "")
+    writing_mode = session.get('last_writing_mode', "horizontal")
+    if not text:
+        flash("プレビューする文章がありません。先に入力してください。")
+        return redirect(url_for("index"))
+
+    try:
+        p = int(request.args.get("p", 1))
+    except Exception:
+        p = 1
+
     pages = parse_document(text)
-    html = to_html_document(pages, writing_mode=writing_mode)
-    return render_template("preview.html", html=html, writing_mode=writing_mode)  # :contentReference[oaicite:4]{index=4}
+    total = len(pages)
+    p = max(1, min(total, p))
+    page = pages[p-1]
+    nums = list(range(1, total+1))
+    return render_template(
+        "preview.html",
+        page=page,
+        total=total,
+        p=p,
+        nums=nums,
+        writing_mode=writing_mode,
+        text=text,
+    )
 
 @app.route("/export", methods=["POST"])
 def export():
