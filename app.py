@@ -24,7 +24,7 @@ from flask import (
 from flask_session import Session
 from werkzeug.utils import secure_filename
 
-from parser import parse_document, to_html_document
+from parser import parse_document
 
 storage = None
 NotFound = None
@@ -351,16 +351,10 @@ def export():
     text = request.form.get("text","")
     writing_mode = request.form.get("writing_mode","horizontal")
     session['last_text'] = text; session['last_writing_mode'] = writing_mode
-    pages = parse_document(text)
-    html_doc = to_html_document(
-        pages,
-        writing_mode=writing_mode,
-        include_boilerplate=True,
-        inline_assets=True,
-    )
-    out_path = os.path.join(BASE_DIR, "export.html")
-    with open(out_path, "w", encoding="utf-8") as f: f.write(html_doc)
-    return send_file(out_path, as_attachment=True, download_name="export.html")
+    out_path = os.path.join(BASE_DIR, "export.txt")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return send_file(out_path, as_attachment=True, download_name="export.txt", mimetype="text/plain")
 
 @app.route("/read", defaults={"p": None})
 @app.route("/read/<int:p>")

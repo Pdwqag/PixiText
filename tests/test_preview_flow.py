@@ -26,6 +26,7 @@ def test_preview_api_returns_expected_page_slice():
     assert data["p"] == 2
     assert data["total"] == 2
     assert "second page" in data["page_html"]
+    assert data["page_text"].strip() == "second page"
     assert data["writing_mode"] == "vertical"
 
 
