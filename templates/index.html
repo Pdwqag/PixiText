@@ -77,6 +77,36 @@
   </form>
 </section>
 
+<!-- ===== 簡易プレビュー（トップページ） ===== -->
+<section class="panel panel--preview">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Quick Preview</span>
+      <h2 class="panel-title">簡易プレビュー</h2>
+      <p class="panel-description">画像ギャラリーや保存一覧と同じ場所から、ページ分割後の本文を確認できます。</p>
+    </div>
+    <div class="panel-actions">
+      <a class="link-button subtle" href="{{ url_for('preview', p=1) }}">詳細プレビュー</a>
+      <a class="link-button" href="{{ url_for('read_single', p=1) }}">ページ送りで読む</a>
+    </div>
+  </header>
+
+  <div class="rendered" data-preview-panel>
+    <p class="empty-hint" data-preview-empty>本文を入力するとここにプレビューが表示されます。</p>
+
+    <div class="preview-box" data-preview-box hidden>
+      <label for="inline-preview-text" class="page-text__label">このページの本文</label>
+      <textarea id="inline-preview-text" class="page-text__area" readonly data-preview-text></textarea>
+      <div class="preview-nav">
+        <button type="button" data-preview-prev>前のページ</button>
+        <span class="preview-counter" data-preview-counter>1 / 1</span>
+        <button type="button" data-preview-next>次のページ</button>
+        <button type="button" class="subtle" data-preview-refresh>プレビューを更新</button>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ===== 画像アップロード ===== -->
 <section class="panel">
   <header class="panel-heading">
