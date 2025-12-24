@@ -217,7 +217,7 @@ def parse_document(text: str):
     for i, raw in enumerate(pages_raw, start=1):
         blocks = [b for b in re.split(r'(?=^\s*\[chapter:[^\]]+\])', raw, flags=re.M) if b != ""]
         html_blocks = [render_block(b, i) for b in blocks]
-        pages.append({"index": i, "html": "\n".join(html_blocks)})
+        pages.append({"index": i, "html": "\n".join(html_blocks), "text": raw})
     return pages
 
 
