@@ -24,7 +24,7 @@ from flask import (
 from flask_session import Session
 from werkzeug.utils import secure_filename
 
-from parser import parse_document, to_html_document
+from parser import parse_document
 
 storage = None
 NotFound = None
@@ -295,7 +295,12 @@ def preview():
     except Exception:
         p = 1
 
-    pages = parse_document(text)
+    try:
+        pages = parse_document(text)
+    except Exception as e:
+        flash(f"プレビュー生成に失敗しました: {e}")
+        return redirect(url_for("index"))
+
     total = len(pages)
     p = max(1, min(total, p))
     page = pages[p-1]
@@ -310,21 +315,57 @@ def preview():
         text=text,
     )
 
+
+@app.route("/api/preview_page", methods=["GET", "POST"])
+def api_preview_page():
+    payload = request.get_json(silent=True) or request.form or {}
+
+    if request.method == "POST":
+        text = payload.get("text", "")
+        writing_mode = payload.get("writing_mode", "horizontal")
+        session["last_text"] = text
+        session["last_writing_mode"] = writing_mode
+        p_param = payload.get("p")
+    else:
+        text = session.get("last_text", "")
+        writing_mode = session.get("last_writing_mode", "horizontal")
+        p_param = request.args.get("p")
+
+    if not text:
+        return jsonify(success=False, message="プレビューする文章がありません。"), 400
+
+    try:
+        p = int(p_param or 1)
+    except Exception:
+        p = 1
+
+    try:
+        pages = parse_document(text)
+    except Exception as e:
+        return jsonify(success=False, message=f"プレビュー生成に失敗しました: {e}"), 400
+
+    total = len(pages) or 1
+    p = max(1, min(total, p))
+    page = pages[p - 1]
+
+    return jsonify(
+        success=True,
+        p=p,
+        total=total,
+        page_html=page.get("html", ""),
+        page_text=page.get("text", ""),
+        writing_mode=writing_mode,
+    )
+
 @app.route("/export", methods=["POST"])
 def export():
     text = request.form.get("text","")
     writing_mode = request.form.get("writing_mode","horizontal")
     session['last_text'] = text; session['last_writing_mode'] = writing_mode
-    pages = parse_document(text)
-    html_doc = to_html_document(
-        pages,
-        writing_mode=writing_mode,
-        include_boilerplate=True,
-        inline_assets=True,
-    )
-    out_path = os.path.join(BASE_DIR, "export.html")
-    with open(out_path, "w", encoding="utf-8") as f: f.write(html_doc)
-    return send_file(out_path, as_attachment=True, download_name="export.html")
+    out_path = os.path.join(BASE_DIR, "export.txt")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return send_file(out_path, as_attachment=True, download_name="export.txt", mimetype="text/plain")
 
 @app.route("/read", defaults={"p": None})
 @app.route("/read/<int:p>")

@@ -6,23 +6,15 @@
     <div class="panel-heading__text">
       <span class="panel-kicker">Live Preview</span>
       <h2 class="panel-title">プレビュー</h2>
-      <p class="panel-description">書式や挿絵の表示を確認してから公開ステップへ進みましょう。</p>
+      <p class="panel-description">ページごとに分割された本文をテキストとして確認し、必要に応じてコピーできます。</p>
     </div>
     <div class="panel-actions">
       <a class="link-button" href="{{ url_for('read_single', p=1) }}">ページ送りで読む</a>
-      <form method="post" action="{{ url_for('export') }}">
-        <input type="hidden" name="text" value="{{ text|e }}">
-        <input type="hidden" name="writing_mode" value="{{ writing_mode }}">
-        <button type="submit">HTMLとして保存</button>
-      </form>
     </div>
   </header>
   <div class="rendered">
-    <div class="document {{ writing_mode }}">
-      <section class="page single" id="page-{{p}}" data-index="{{p}}">
-        <div class="page-inner">{{ page.html|safe }}</div>
-      </section>
-    </div>
+    <label for="page-text" class="page-text__label">このページの本文</label>
+    <textarea id="page-text" class="page-text__area" readonly>{{ page.text }}</textarea>
   </div>
   <div class="bottom-pager">
     <div class="pager-center">
