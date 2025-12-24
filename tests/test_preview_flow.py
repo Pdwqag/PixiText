@@ -30,6 +30,23 @@ def test_preview_api_returns_expected_page_slice():
     assert data["writing_mode"] == "vertical"
 
 
+def test_preview_displays_all_pages_inline():
+    app.app.config["TESTING"] = True
+    client = app.app.test_client()
+
+    with client.session_transaction() as sess:
+        sess["last_text"] = "first page\n[newpage]\nsecond page"
+        sess["last_writing_mode"] = "horizontal"
+
+    resp = client.get("/preview")
+    body = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert body.count("page-text__area") == 2
+    assert "first page" in body
+    assert "second page" in body
+
+
 def test_preview_handles_parse_errors_gracefully(monkeypatch):
     app.app.config["TESTING"] = True
     client = app.app.test_client()
