@@ -360,8 +360,7 @@ def api_preview_page():
     try:
         pages = parse_document(text)
     except Exception as e:
-        flash(f"プレビュー生成に失敗しました: {e}")
-        return redirect(url_for("index"))
+        return jsonify(success=False, message=f"プレビュー生成に失敗しました: {e}"), 400
 
     total = len(pages)
     p = max(1, min(total, p))
