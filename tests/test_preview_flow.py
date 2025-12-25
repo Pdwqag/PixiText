@@ -79,28 +79,11 @@ def test_preview_api_reports_parse_errors(monkeypatch):
     assert "失敗" in data["message"]
 
 
-def test_reader_shows_all_pages_in_single_view():
-    app.app.config["TESTING"] = True
-    client = app.app.test_client()
-
-    with client.session_transaction() as sess:
-        sess["last_text"] = "alpha\n[newpage]\nbeta"
-        sess["last_writing_mode"] = "vertical"
-
-    resp = client.get("/read")
-    body = resp.get_data(as_text=True)
-
-    assert resp.status_code == 200
-    assert "alpha" in body
-    assert "beta" in body
-    assert body.count("page-text__area") == 2
-
-
 def test_preview_api_accepts_post_payload_and_sets_session(monkeypatch):
     app.app.config["TESTING"] = True
     client = app.app.test_client()
 
-    monkeypatch.setattr(app, "parse_document", lambda text: [{"html": text, "text": text}])
+    monkeypatch.setattr(app, "parse_document", lambda text: [{"html": text}])
 
     resp = client.post(
         "/api/preview_page",
@@ -112,7 +95,6 @@ def test_preview_api_accepts_post_payload_and_sets_session(monkeypatch):
     assert resp.status_code == 200
     assert data["success"] is True
     assert data["page_html"] == "hello"
-    assert data["page_text"] == "hello"
     assert data["writing_mode"] == "vertical"
 
     # セッションに保存され、プレビューへの遷移に使えることを確認
