@@ -452,8 +452,35 @@ def read_single():
     writing_mode = session.get("last_writing_mode", "horizontal")
     if not text:
         return redirect(url_for("index"))
-    pages = parse_document(text)
-    return render_template("read.html", pages=pages, writing_mode=writing_mode)
+    try:
+        pages = parse_document(text)
+    except Exception as e:
+        flash(f"本文の読み込みに失敗しました: {e}")
+        return redirect(url_for("index"))
+
+    try:
+        p = int(request.args.get("p", 1))
+    except Exception:
+        p = 1
+
+    total = len(pages) or 1
+    p = max(1, min(total, p))
+    page = pages[p - 1] if pages else {"text": "", "html": ""}
+
+    nums = list(range(1, total + 1))
+    prev_p = 1 if p <= 1 else p - 1
+    next_p = total if p >= total else p + 1
+
+    return render_template(
+        "read.html",
+        page=page,
+        p=p,
+        nums=nums,
+        total=total,
+        prev_p=prev_p,
+        next_p=next_p,
+        writing_mode=writing_mode,
+    )
 
 @app.route("/delete_image/<img_id>", methods=["POST"])
 def delete_image(img_id):
