@@ -312,11 +312,20 @@ def preview():
         page = pages[p - 1]
         total = len(pages)
 
+    nums = list(range(1, total + 1)) if total > 0 else []
+
+    prev_p = 1 if p <= 1 else p - 1
+    next_p = total if p >= total else p + 1
+
+
     return render_template(
         "preview.html",
         pages=pages,
         page=page,
         p=p,
+        nums=nums,
+        prev_p=prev_p,
+        next_p=next_p,
         total=total,
         writing_mode=writing_mode,
         text=text,
