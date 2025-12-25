@@ -1,7 +1,7 @@
 
 {% extends "base.html" %}
 {% block content %}
-<section class="panel">
+<section class="panel panel--preview-page">
   <header class="panel-heading">
     <div class="panel-heading__text">
       <span class="panel-kicker">Live Preview</span>
@@ -13,6 +13,10 @@
     </div>
   </header>
   <div class="rendered">
+    <div class="page-meta">
+      <span class="page-meta__label">ページ</span>
+      <span class="page-meta__counter">{{ p }} / {{ total if total else 1 }}</span>
+    </div>
     <label for="page-text" class="page-text__label">このページの本文</label>
     <textarea id="page-text" class="page-text__area" readonly>{{ page.text }}</textarea>
   </div>

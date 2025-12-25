@@ -15,11 +15,11 @@
   </div>
   <div class="bottom-pager">
     <div class="pager-center">
-      <a class="page-arrow prev" href="{{ url_for('read_single', p=max(1, p-1)) }}">&lsaquo;</a>
+      <a class="page-arrow prev" href="{{ url_for('read_single', p=prev_p) }}">&lsaquo;</a>
       {% for i in nums %}
         <a class="page-number {% if i==p %}active{% endif %}" href="{{ url_for('read_single', p=i) }}">{{ i }}</a>
       {% endfor %}
-      <a class="page-arrow next" href="{{ url_for('read_single', p=min(total, p+1)) }}">&rsaquo;</a>
+      <a class="page-arrow next" href="{{ url_for('read_single', p=next_p) }}">&rsaquo;</a>
     </div>
   </div>
 </section>
