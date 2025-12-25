@@ -86,19 +86,19 @@ window.addEventListener('pageshow', (e) => {
   });
 })();
 
-async function callPreviewAPI(body){
-  const resp = await fetch('/api/preview_page', {
-    method: 'POST',
-    body,
-    credentials: 'same-origin',
-  });
-
-  const data = await resp.json().catch(() => ({}));
-  return { resp, data };
-}
-
 // --- 4) プレビュー送信前にエラーチェックしてトースト表示 ---
 (()=>{
+  async function requestPreview(fd){
+    const resp = await fetch('/api/preview_page', {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+    });
+
+    const data = await resp.json().catch(() => ({}));
+    return { resp, data };
+  }
+
   document.addEventListener('submit', async (e)=>{
     const form = e.target;
     const submitter = e.submitter || document.activeElement;
@@ -115,7 +115,7 @@ async function callPreviewAPI(body){
     }
 
     try {
-      const { resp, data } = await callPreviewAPI(fd);
+      const { resp, data } = await requestPreview(fd);
 
       if (resp.ok && data.success) {
         const target = new URL(action, location.href);
@@ -131,91 +131,4 @@ async function callPreviewAPI(body){
       console.error(err);
     }
   });
-})();
-
-// --- 5) トップページに簡易プレビューカードを表示 ---
-(()=>{
-  const panel = document.querySelector('[data-preview-panel]');
-  if (!panel) return;
-
-  const box = panel.querySelector('[data-preview-box]');
-  const empty = panel.querySelector('[data-preview-empty]');
-  const textArea = panel.querySelector('[data-preview-text]');
-  const counter = panel.querySelector('[data-preview-counter]');
-  const prev = panel.querySelector('[data-preview-prev]');
-  const next = panel.querySelector('[data-preview-next]');
-  const refresh = panel.querySelector('[data-preview-refresh]');
-  const textInput = document.getElementById('text');
-  const modeSelect = document.querySelector('select[name="writing_mode"]');
-
-  let current = 1;
-  let total = 1;
-
-  function toggleEmpty(showEmpty){
-    if (!box || !empty) return;
-    box.hidden = showEmpty;
-    empty.hidden = !showEmpty;
-  }
-
-  async function loadPreview(page = 1){
-    const textValue = textInput ? textInput.value.trim() : '';
-    if (!textValue) {
-      toggleEmpty(true);
-      return;
-    }
-
-    const fd = new FormData();
-    fd.append('text', textValue);
-    fd.append('writing_mode', modeSelect ? modeSelect.value : 'horizontal');
-    fd.append('p', page);
-
-    try {
-      const { resp, data } = await callPreviewAPI(fd);
-
-      if (resp.ok && data.success) {
-        current = data.p || 1;
-        total = data.total || 1;
-        if (textArea) textArea.value = data.page_text || '';
-        if (counter) counter.textContent = `${current} / ${total}`;
-        if (prev) prev.disabled = current <= 1;
-        if (next) next.disabled = current >= total;
-        toggleEmpty(false);
-        return;
-      }
-
-      const msg = (data && data.message) ? data.message : 'プレビューの取得に失敗しました。';
-      window.showToast && window.showToast(msg);
-      toggleEmpty(true);
-    } catch (err) {
-      window.showToast && window.showToast('プレビュー取得中にエラーが発生しました。');
-      console.error(err);
-      toggleEmpty(true);
-    }
-  }
-
-  prev && prev.addEventListener('click', (e)=>{
-    e.preventDefault();
-    if (current <= 1) return;
-    loadPreview(current - 1);
-  });
-
-  next && next.addEventListener('click', (e)=>{
-    e.preventDefault();
-    if (current >= total) return;
-    loadPreview(current + 1);
-  });
-
-  refresh && refresh.addEventListener('click', (e)=>{
-    e.preventDefault();
-    loadPreview(1);
-  });
-
-  if (textInput) {
-    textInput.addEventListener('change', ()=> loadPreview(1));
-  }
-  if (modeSelect) {
-    modeSelect.addEventListener('change', ()=> loadPreview(current));
-  }
-
-  document.addEventListener('DOMContentLoaded', ()=> loadPreview(1));
 })();
