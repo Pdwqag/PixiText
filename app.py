@@ -303,6 +303,8 @@ def preview():
         text=text,
     )
 
+
+@app.route("/api/preview_page", methods=["GET", "POST"])
 def api_preview_page():
     payload = request.get_json(silent=True) or request.form or {}
 
@@ -328,9 +330,10 @@ def api_preview_page():
     try:
         pages = parse_document(text)
     except Exception as e:
-        return jsonify(success=False, message=f"プレビュー生成に失敗しました: {e}"), 400
+        flash(f"プレビュー生成に失敗しました: {e}")
+        return redirect(url_for("index"))
 
-    total = len(pages) or 1
+    total = len(pages)
     p = max(1, min(total, p))
     page = pages[p - 1]
 
@@ -344,9 +347,39 @@ def api_preview_page():
     )
 
 
+@app.route("/api/preview_page")
+def api_preview_page():
+    text = session.get("last_text", "")
+    writing_mode = session.get("last_writing_mode", "horizontal")
+
+    if not text:
+        return jsonify(success=False, message="プレビューする文章がありません。"), 400
+
+    try:
+        p = int(request.args.get("p", 1))
+    except Exception:
+        p = 1
+
+    try:
+        pages = parse_document(text)
+    except Exception as e:
+        return jsonify(success=False, message=f"プレビュー生成に失敗しました: {e}"), 400
+
+    total = len(pages) or 1
+    p = max(1, min(total, p))
+    page = pages[p - 1]
+
+    return jsonify(
+        success=True,
+        p=p,
+        total=total,
+        page_html=page.get("html", ""),
+        writing_mode=writing_mode,
+    )
+
+
 # 明示的にエンドポイント名を指定し、重複登録を避ける
-# 旧エンドポイント名と衝突しないようユニークな名前にする
-PREVIEW_ENDPOINT = "api_preview_page_v2"
+PREVIEW_ENDPOINT = "api_preview_page"
 
 
 def _ensure_preview_route_registered():

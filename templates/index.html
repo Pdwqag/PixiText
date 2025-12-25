@@ -86,8 +86,8 @@
       <p class="panel-description">画像ギャラリーや保存一覧と同じ場所から、ページ分割後の本文を確認できます。</p>
     </div>
     <div class="panel-actions">
-      <a class="link-button subtle" href="{{ url_for('preview') }}">詳細プレビュー</a>
-      <a class="link-button" href="{{ url_for('read_single') }}">テキストリーダーで読む</a>
+      <a class="link-button subtle" href="{{ url_for('preview', p=1) }}">詳細プレビュー</a>
+      <a class="link-button" href="{{ url_for('read_single', p=1) }}">ページ送りで読む</a>
     </div>
   </header>
 
