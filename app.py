@@ -348,7 +348,7 @@ def api_preview_page():
 
 
 @app.route("/api/preview_page")
-def api_preview_page():
+def api_preview_page_v2():
     text = session.get("last_text", "")
     writing_mode = session.get("last_writing_mode", "horizontal")
 
@@ -379,7 +379,7 @@ def api_preview_page():
 
 
 # 明示的にエンドポイント名を指定し、重複登録を避ける
-PREVIEW_ENDPOINT = "api_preview_page"
+PREVIEW_ENDPOINT = "api_preview_page_v2"
 
 
 def _ensure_preview_route_registered():
@@ -400,7 +400,7 @@ def _ensure_preview_route_registered():
     app.add_url_rule(
         "/api/preview_page",
         endpoint=PREVIEW_ENDPOINT,
-        view_func=api_preview_page,
+        view_func=api_preview_page_v2,
         methods=["GET", "POST"],
     )
 
