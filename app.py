@@ -280,12 +280,13 @@ def upload():
 @app.route("/preview", methods=["GET", "POST"])
 def preview():
     if request.method == "POST":
-        session['last_text'] = request.form.get("text","")
-        session['last_writing_mode'] = request.form.get("writing_mode","horizontal")
+        session["last_text"] = request.form.get("text", "")
+        session["last_writing_mode"] = request.form.get("writing_mode", "horizontal")
         return redirect(url_for("preview"))
 
-    text = session.get('last_text', "")
-    writing_mode = session.get('last_writing_mode', "horizontal")
+    text = session.get("last_text", "")
+    writing_mode = session.get("last_writing_mode", "horizontal")
+
     if not text:
         flash("プレビューする文章がありません。先に入力してください。")
         return redirect(url_for("index"))
@@ -296,12 +297,32 @@ def preview():
         flash(f"プレビュー生成に失敗しました: {e}")
         return redirect(url_for("index"))
 
+    p = request.args.get("p", "1")
+    try:
+        p = int(p)
+    except ValueError:
+        p = 1
+
+    if not pages:
+        page = {"text": "", "html": ""}
+        p = 1
+        total = 0
+    else:
+        p = max(1, min(len(pages), p))
+        page = pages[p - 1]
+        total = len(pages)
+
     return render_template(
         "preview.html",
         pages=pages,
+        page=page,
+        p=p,
+        total=total,
         writing_mode=writing_mode,
         text=text,
     )
+
+
 
 
 @app.route("/api/preview_page", methods=["GET", "POST"])
