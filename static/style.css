@@ -771,21 +771,28 @@ form[action*="upload"] button[type="submit"]{ align-self:flex-start; }
 
 
 /* ===== @08 Chapter Title ===== */
-.chapter{
+.chapter,
+.chapter-title{
   font-size: clamp(1.35rem, 1.1rem + .9vw, 1.9rem); font-weight:800;
   margin:10px 0 14px; padding-left:14px; line-height:1.35; border-left:4px solid color-mix(in srgb, var(--accent) 85%, #fff 0%);
 }
 
 /* 章見出し・段落の最終統一（重複排除済み） */
-.document .page .page-inner h2.chapter{ margin-top:0; margin-bottom:1.6em; line-height:1.4; }
-.document .page .page-inner h2.chapter + p{ margin-top:.8em; }
-.document .page .page-inner h2.chapter + .blankline{ height:1.2em; }
+.document .page .page-inner h2.chapter,
+.document .page .page-inner h2.chapter-title{ margin-top:0; margin-bottom:1.6em; line-height:1.4; }
+.document .page .page-inner h2.chapter + p,
+.document .page .page-inner h2.chapter-title + p{ margin-top:.8em; }
+.document .page .page-inner h2.chapter + .blankline,
+.document .page .page-inner h2.chapter-title + .blankline{ height:1.2em; }
 .blankline{ height:1em; }
 .document .page-inner p{ margin:0; line-height:1.9; }
 .document .page-inner p + p{ margin-top:1em; }
 
 
 /* ===== @09 Document Preview ===== */
+.panel--preview-page{ position:relative; padding-bottom:calc(var(--pager-height) + 28px); }
+.panel--preview-page .rendered{ margin-bottom:28px; }
+
 .document .page{
   max-width:780px;
   margin:32px auto;

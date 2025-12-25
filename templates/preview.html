@@ -1,7 +1,7 @@
 
 {% extends "base.html" %}
 {% block content %}
-<section class="panel">
+<section class="panel panel--preview-page">
   <header class="panel-heading">
     <div class="panel-heading__text">
       <span class="panel-kicker">Live Preview</span>
@@ -12,10 +12,12 @@
       <a class="link-button" href="{{ url_for('read_single', p=1) }}">ページ送りで読む</a>
     </div>
   </header>
+  {% for page in pages %}
   <div class="rendered">
-    <label for="page-text" class="page-text__label">このページの本文</label>
-    <textarea id="page-text" class="page-text__area" readonly>{{ page.text }}</textarea>
+    <label for="page-text-{{ loop.index }}" class="page-text__label">{{ loop.index }}ページ目の本文</label>
+    <textarea id="page-text-{{ loop.index }}" class="page-text__area" readonly>{{ page.text }}</textarea>
   </div>
+  {% endfor %}
   <div class="bottom-pager">
     <div class="pager-center">
       <a class="page-arrow prev" href="{{ url_for('preview', p=prev_p) }}">&lsaquo;</a>
