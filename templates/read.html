@@ -5,25 +5,25 @@
   <header class="panel-heading">
     <div class="panel-heading__text">
       <span class="panel-kicker">Reader</span>
-      <h2 class="panel-title">単ページビュー</h2>
-      <p class="panel-description">ページ送りで作品全体を確認できます。</p>
+      <h2 class="panel-title">テキストリーダー</h2>
+      <p class="panel-description">ページごとに分割された本文を同一ページ内で表示します。コピー用途にも使えます。</p>
     </div>
   </header>
-  <div class="rendered">
-    <div class="document {{ writing_mode }}">
-      <section class="page single" id="page-{{p}}" data-index="{{p}}">
-        <div class="page-inner">{{ page.html|safe }}</div>
-      </section>
-    </div>
-  </div>
-  <div class="bottom-pager">
-    <div class="pager-center">
-      <a class="page-arrow prev" href="{{ url_for('read_single', p=max(1, p-1)) }}">&lsaquo;</a>
-      {% for i in nums %}
-        <a class="page-number {% if i==p %}active{% endif %}" href="{{ url_for('read_single', p=i) }}">{{ i }}</a>
-      {% endfor %}
-      <a class="page-arrow next" href="{{ url_for('read_single', p=min(total, p+1)) }}">&rsaquo;</a>
-    </div>
+  <div class="rendered page-stack" aria-label="ページ分割された本文">
+    {% for page in pages %}
+      <article class="page-text-card" id="read-page-{{ page.index }}">
+        <div class="page-text__header">
+          <span class="page-badge">Page {{ page.index }}</span>
+          <span class="page-note">[newpage] の位置で区切られています</span>
+        </div>
+        <label for="read-page-text-{{ page.index }}" class="page-text__label">{{ page.index }}ページ目の本文</label>
+        <textarea
+          id="read-page-text-{{ page.index }}"
+          class="page-text__area"
+          readonly
+        >{{ page.text }}</textarea>
+      </article>
+    {% endfor %}
   </div>
 </section>
 {% endblock %}
