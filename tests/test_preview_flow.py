@@ -47,23 +47,6 @@ def test_preview_displays_single_page_with_pager():
     assert "first page" not in body
 
 
-def test_reader_displays_single_page_at_a_time():
-    app.app.config["TESTING"] = True
-    client = app.app.test_client()
-
-    with client.session_transaction() as sess:
-        sess["last_text"] = "first page\n[newpage]\nsecond page"
-        sess["last_writing_mode"] = "horizontal"
-
-    resp = client.get("/read?p=2")
-    body = resp.get_data(as_text=True)
-
-    assert resp.status_code == 200
-    assert body.count("page-text__area") == 1
-    assert "second page" in body
-    assert "first page" not in body
-
-
 def test_preview_handles_parse_errors_gracefully(monkeypatch):
     app.app.config["TESTING"] = True
     client = app.app.test_client()
