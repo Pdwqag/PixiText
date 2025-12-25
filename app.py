@@ -377,6 +377,36 @@ def api_preview_page():
         writing_mode=writing_mode,
     )
 
+
+# 明示的にエンドポイント名を指定し、重複登録を避ける
+PREVIEW_ENDPOINT = "api_preview_page"
+
+
+def _ensure_preview_route_registered():
+    """プレビューAPIの重複登録を防ぎ、必要なら再登録する。"""
+
+    # 既存の同名エンドポイントがある場合は削除してから登録し直す
+    if PREVIEW_ENDPOINT in app.view_functions:
+        del app.view_functions[PREVIEW_ENDPOINT]
+
+    # URLマップから同じエンドポイントのルールを除去
+    rules_to_remove = [r for r in app.url_map.iter_rules() if r.endpoint == PREVIEW_ENDPOINT]
+    for rule in rules_to_remove:
+        app.url_map._rules.remove(rule)
+        app.url_map._rules_by_endpoint[PREVIEW_ENDPOINT].remove(rule)
+        if not app.url_map._rules_by_endpoint[PREVIEW_ENDPOINT]:
+            del app.url_map._rules_by_endpoint[PREVIEW_ENDPOINT]
+
+    app.add_url_rule(
+        "/api/preview_page",
+        endpoint=PREVIEW_ENDPOINT,
+        view_func=api_preview_page,
+        methods=["GET", "POST"],
+    )
+
+
+_ensure_preview_route_registered()
+
 @app.route("/export", methods=["POST"])
 def export():
     text = request.form.get("text","")
