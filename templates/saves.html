@@ -9,6 +9,15 @@
     </div>
   </header>
 
+  <form method="get" action="{{ url_for('saves_list') }}" class="saves-search" role="search">
+    <input type="search" name="q" value="{{ q or '' }}" class="saves-search__input"
+           placeholder="文書を検索（ファイル名）" autocomplete="off">
+    <button type="submit" class="btn">検索</button>
+    {% if q %}
+      <a class="btn" href="{{ url_for('saves_list') }}">クリア</a>
+    {% endif %}
+  </form>
+
 
   {% if files %}
     <div class="saves-list">
@@ -71,9 +80,6 @@
                   </button>
                 </form>
 
-                <button class="btn btn-mini" type="button" data-copy="{{ f.name }}" title="コピー">
-                  <img class="ui-icon" src="{{ url_for('static', filename='picture/copy.png') }}" alt="">
-                </button>
               </div>
             </div>
           </div>

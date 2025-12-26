@@ -1,14 +1,9 @@
 {
   "users": {
-    "u_1766680672615": {
-      "username": "q",
-      "password_hash": "scrypt:32768:8:1$K1WNtNbz1cNlh7pk$9b0a83afe16d9019d7ad25797be583573f3edd3d94f6bfe27a5e7103e7c8618cb07df1ea5a1e81a36faeea78655209fdfc7bad615a88c0192766c3430737dcb2",
-      "created_at": 1766680672
-    },
-    "u_1766680904351": {
-      "username": "あ",
-      "password_hash": "scrypt:32768:8:1$NPIqA7pagqtgLozL$14423e41d04b9b4c878a789f98bb9a7c2405f05fae835861a8f395e31749592f3cf1c8ea134267692334b49407ebe2f18d419f73ad2c186b5ce14ccc74708436",
-      "created_at": 1766680904
+    "u_1766717973325": {
+      "username": "sample",
+      "password_hash": "scrypt:32768:8:1$qKE0T3mFj6I7H7Fo$cf38e32f13ab64975e448471ec89c03d240bdcbe06fdcf06514e39f9e1424cbd093ecc07b0fc437f0d1f85dae3b73a1b801bb6f4cec4780c6814faca17268906",
+      "created_at": 1766717973
     }
   }
 }

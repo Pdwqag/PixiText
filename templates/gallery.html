@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+
 <section class="panel gallery-panel">
   <header class="panel-heading">
     <div class="panel-heading__text">
@@ -9,26 +10,46 @@
     </div>
   </header>
 
-  <!-- ===== 画像アップロード ===== -->
-<section class="panel">
-  <header class="panel-heading">
-    <div class="panel-heading__text">
-      <span class="panel-kicker">Illustration Assets</span>
-      <h2 class="panel-title">画像アップロード（挿絵）</h2>
-      <p class="panel-description">サイズは調整しますがちゃんと考慮してください</p>
-    </div>
-  </header>
-
-  <!-- base.html 側の “未選択トースト” と style.css のカスタムUIに対応 -->
-  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
-    <label class="file-uploader">
-      <input type="file" name="file" accept="image/*">
-      <span class="fu-btn">ファイルを選択</span>
-      <span class="fu-name" data-placeholder="ファイルが選択されていません">ファイルが選択されていません</span>
-      <button type="submit" class="primary">アップロード</button>
-    </label>
+  <form method="get" action="{{ url_for('gallery') }}" class="gallery-search" role="search">
+    <input type="search" name="q" value="{{ q or '' }}" class="gallery-search__input"
+           placeholder="画像を検索(ファイル名)" autocomplete="off">
+    <button type="submit" class="btn">検索</button>
+    {% if q %}<a class="btn" href="{{ url_for('gallery') }}">クリア</a>{% endif %}
   </form>
-</section>
+
+  <!-- ===== 画像アップロード（折りたたみ） ===== -->
+  <details class="panel panel-collapsible" id="uploadPanel">
+    <summary class="panel-collapsible__summary">
+      <div class="panel-heading__text">
+        <span class="panel-kicker">Illustration Assets</span>
+        <h2 class="panel-title">画像アップロード（挿絵）</h2>
+        <p class="panel-description">クリックで展開します</p>
+      </div>
+    </summary>
+
+    <div class="panel-collapsible__body">
+      <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+        <div class="upload-preview-wrap" id="uploadPreviewWrap" hidden>
+          <img id="uploadPreview" class="upload-preview" alt="プレビュー">
+        </div>
+
+        <label class="upload-title-label">
+          <span class="upload-title-caption">表示名（任意）</span>
+          <input type="text" name="title" class="upload-title" placeholder="例：挿絵１">
+        </label>
+
+        <label class="file-uploader">
+          <input id="uploadFile" type="file" name="file" accept="image/*">
+          <span class="fu-btn">ファイルを選択</span>
+          <span class="fu-name" data-placeholder="ファイルが選択されていません">
+            ファイルが選択されていません
+          </span>
+        </label>
+
+        <button type="submit" class="primary">アップロード</button>
+      </form>
+    </div>
+  </details>
 
 
   {% if cloud_targets %}
@@ -82,10 +103,14 @@
           <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank">
             <img src="{{ url_for('image_by_id', img_id=it.id) }}">
           </a>
+          
           <div class="mg-body">
-            <!-- ★ タイトル＋コピー（横並び） -->
+            <div class="mg-title" title="{{ it.title or it.original_name or it.stored_name }}">
+              {{ it.title or it.original_name or it.stored_name }}
+            </div>
+
             <div class="mg-title-row">
-              <div class="mg-name" title="{{ it.original_name or it.stored_name }}">
+              <div class="mg-tag" title="タグ">
                 [uploadedimage:{{ it.id }}]
               </div>
 
@@ -98,6 +123,7 @@
               </button>
             </div>
           </div>
+
         </div>
       {% endfor %}
     </div>
@@ -133,4 +159,81 @@
     <p class="cloud-note">Google Cloud Storage を有効化すると、ここにバックアップへのショートカットが表示されます。</p>
   {% endif %} -->
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const fileInput   = document.getElementById('uploadFile');
+  const nameSpan    = document.querySelector('.file-uploader .fu-name');
+  const previewWrap = document.getElementById('uploadPreviewWrap');
+  const previewImg  = document.getElementById('uploadPreview');
+
+  if (!fileInput || !previewWrap || !previewImg) return;
+
+  // 念のため初期状態は非表示
+  previewWrap.hidden = true;
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+
+    // ファイル名表示
+    if (nameSpan) {
+      nameSpan.textContent = file
+        ? file.name
+        : (nameSpan.dataset.placeholder || 'ファイルが選択されていません');
+    }
+
+    // 未選択・画像以外 → 非表示
+    if (!file || !file.type.startsWith('image/')) {
+      previewWrap.hidden = true;
+      previewImg.removeAttribute('src');
+      return;
+    }
+
+    // プレビュー表示
+    const url = URL.createObjectURL(file);
+    previewImg.src = url;
+    previewWrap.hidden = false;
+
+    // メモリ解放
+    previewImg.onload = () => URL.revokeObjectURL(url);
+  });
+});
+
+async function copyText(text){
+  // 1) Clipboard API（HTTPS/localhost）
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+
+  // 2) フォールバック（HTTPでも動くことが多い）
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+}
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-copy]");
+  if (!btn) return;
+
+  const text = btn.dataset.copy;
+  if (!text) return;
+
+  try {
+    await copyText(text);
+    btn.classList.add("copied");
+    setTimeout(() => btn.classList.remove("copied"), 1200);
+  } catch (err) {
+    alert("コピーに失敗しました");
+    console.error(err);
+  }
+});
+
+</script>
+
+
 {% endblock %}

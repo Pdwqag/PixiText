@@ -296,6 +296,7 @@ def uploaded(filename):
 def gallery():
     db = _load_db()
     uid = session.get("user_id")
+    q = (request.args.get("q") or "").strip().lower()
 
     items = []
     for k, v in db.items():
@@ -305,10 +306,21 @@ def gallery():
         # → 取り込みたいなら「移行」で owner を付ける
         if v.get("owner") != uid:
             continue
+
+        # 検索（タイトル/元ファイル名/保存名/ID に部分一致）
+        if q:
+            hay = " ".join([
+                str(k or ""),
+                str(v.get("title") or ""),
+                str(v.get("original_name") or ""),
+                str(v.get("stored_name") or ""),
+            ]).lower()
+            if q not in hay:
+                continue
         items.append({"id": k, **v})
 
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    return render_template("gallery.html", items=items)
+    return render_template("gallery.html", items=items, q=request.args.get("q", ""))
 
 @app.route("/gallery/public")
 def gallery_public():
@@ -804,11 +816,17 @@ def save_local():
 def saves_list():
     uid = session.get("user_id")
     meta = _load_saves_meta()
+    q = (request.args.get("q") or "").strip().lower()
 
     files = []
     try:
         for name in os.listdir(SAVES_DIR):
             if not name.lower().endswith(".txt"):
+                continue
+
+
+            # 検索（ファイル名に部分一致。大文字小文字は無視）
+            if q and (q not in name.lower()):
                 continue
 
             p = os.path.join(SAVES_DIR, name)
@@ -838,7 +856,7 @@ def saves_list():
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
 
-    return render_template("saves.html", files=files)
+    return render_template("saves.html", files=files, q=request.args.get("q",""))
 
 @app.route("/saves/visibility", methods=["POST"])
 def saves_set_visibility():

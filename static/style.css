@@ -711,7 +711,7 @@ form[action*="upload"]{
 
 form[action*="upload"] .file-uploader{ width:100%; }
 
-form[action*="upload"] button[type="submit"]{ align-self:flex-start; }
+form[action*="upload"] button[type="submit"]{ align-self:stretch; }
 
 .empty-hint{ color:rgba(205,220,245,.7); margin-top:12px; }
 /* ===== @07 Toolbar & Shortcuts ===== */
@@ -1825,7 +1825,7 @@ select option{
 .copy-wide{
   width:100%;
   margin-top:12px;
-  padding:10px 14px;
+  padding:10px 40px;
   border-radius:999px;
   background:linear-gradient(
     135deg,
@@ -1965,4 +1965,157 @@ select option{
 /* hover したカードだけ少し浮かせる */
 .saves-list .mg-card:hover .save-controls{
   opacity: 1;
+}
+
+
+/* ===== Upload: title & preview ===== */
+.upload-title-label{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.upload-title-caption{
+  font-size:.85rem;
+  font-weight:700;
+  letter-spacing:.04em;
+  color:rgba(210,225,250,.82);
+}
+
+.upload-title{
+  font-family:var(--sans);
+}
+
+.upload-preview-wrap{
+  width:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  padding:14px;
+  border-radius:var(--radius);
+  border:1px solid rgba(118,154,220,.24);
+  background:linear-gradient(145deg, rgba(16,26,48,.9), rgba(10,20,40,.94));
+  box-shadow:0 18px 36px rgba(4,10,26,.35);
+}
+
+.upload-preview{
+  max-width:100%;
+  max-height:220px;
+  height:auto;
+  object-fit:contain;
+  border-radius:12px;
+  box-shadow:0 12px 36px rgba(0,0,0,.35);
+}
+
+/* ===== Gallery: title + tag row ===== */
+.mg-title{
+  font-weight:800;
+  letter-spacing:.01em;
+  color:#f0f4ff;
+  margin-bottom:10px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.mg-tag{
+  flex:1;
+  background:linear-gradient(135deg, rgba(10,18,36,.92), rgba(8,14,28,.95));
+  color:#e2e9ff;
+  border:1px solid rgba(120,160,220,.32);
+  border-radius:12px;
+  font:700 .82rem/1.1 var(--mono);
+  padding:10px 12px;
+  height:38px;
+  display:flex;
+  align-items:center;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.copy-inline{
+  height:38px;
+  width:38px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.copy-inline.copied{
+  outline: 2px solid rgba(101,177,255,.6);
+  box-shadow: 0 0 0 3px rgba(101,177,255,.18);
+}
+.upload-preview-wrap{
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.upload-preview{
+  max-height: 220px;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35);
+}
+
+/* hidden属性は確実に非表示にする（CSS上書き対策） */
+[hidden] { display: none !important; }
+
+.saves-search{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin:12px 0 18px;
+}
+.saves-search__input{
+  flex:1;
+  min-width: 180px;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.gallery-search{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  margin-top:14px;
+}
+
+.gallery-search__input{
+  flex:1;
+  min-width: 180px;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.gallery-search__btn{
+  padding: 12px 18px;  /* ← ボタンを大きく */
+  border-radius: 14px;
+}
+.panel-collapsible__summary{
+  list-style:none;
+  cursor:pointer;
+}
+.panel-collapsible__summary::-webkit-details-marker{
+  display:none;
+}
+
+/* 開閉アイコン（右端に ▼） */
+.panel-collapsible__summary{
+  position:relative;
+  padding-right:42px;
+}
+.panel-collapsible__summary::after{
+  content:"▾";
+  position:absolute;
+  right:18px;
+  top:50%;
+  transform:translateY(-50%);
+  opacity:.75;
+}
+.panel-collapsible[open] .panel-collapsible__summary::after{
+  content:"▴";
+}
+.panel-collapsible__body{
+  margin-top: 14px;
 }
