@@ -68,19 +68,17 @@
   {% if items %}
     <div class="mg-grid mg-grid-lg">
       {% for it in items %}
+        {% set vis = it.visibility %}
         <div class="mg-card">
           <!-- ★ 角アイコンレイヤー -->
           <div class="mg-corner">
             <!-- 左上：公開状態 -->
-            <form method="post"
-                  action="{{ url_for('set_visibility', img_id=it.id) }}"
-                  class="corner-left js-vis-toggle"
-                  data-current="{{ it.visibility }}">
-              <input type="hidden" name="visibility" value="{{ it.visibility }}">
-              <button type="button" class="corner-btn" title="公開範囲を切り替え">
-                {% if it.visibility == 'public' %}
+            <form method="post" action="{{ url_for('set_visibility', img_id=it.id) }}" class="corner-left">
+              <input type="hidden" name="visibility" value="{{ next_vis }}">
+              <button type="submit" class="corner-btn" title="公開範囲を切り替え">
+                {% if vis == 'public' %}
                   <img src="{{ url_for('static', filename='picture/earth.png') }}">
-                {% elif it.visibility == 'unlisted' %}
+                {% elif vis == 'unlisted' %}
                   <img src="{{ url_for('static', filename='picture/chain.png') }}">
                 {% else %}
                   <img src="{{ url_for('static', filename='picture/lock.png') }}">

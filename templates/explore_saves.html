@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel explore-panel explore-saves">
+
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Explore</span>
+      <h2 class="panel-title">公開文章を探す</h2>
+      <p class="panel-description">公開設定された文章一覧です。</p>
+    </div>
+  </header>
+
+  <div class="explore-tabs">
+    <a class="btn {% if type=='saves' %}is-active{% endif %}"
+       href="{{ url_for('explore', type='saves', q=q) }}">文章</a>
+    <a class="btn {% if type=='images' %}is-active{% endif %}"
+       href="{{ url_for('explore', type='images', q=q) }}">画像</a>
+  </div>
+
+  <form method="get" action="{{ url_for('explore') }}" class="gallery-search" role="search">
+    <input type="hidden" name="type" value="saves">
+    <input type="search" name="q" value="{{ q or '' }}"
+           class="gallery-search__input" placeholder="文章タイトルで検索" autocomplete="off">
+    <button type="submit" class="btn">検索</button>
+    {% if q %}
+      <a class="btn" href="{{ url_for('explore', type='saves') }}">クリア</a>
+    {% endif %}
+  </form>
+
+  <div class="mg-grid mg-grid-lg explore-saves-grid">
+    {% for f in files %}
+      <div class="mg-card save-card">
+
+        <div class="mg-body save-body">
+          <div class="save-title-row">
+            <div class="save-title" title="{{ f.name }}">{{ f.name }}</div>
+
+            <div class="save-actions">
+              <a class="btn btn-mini" href="{{ url_for('saves_public_view', fname=f.name) }}">
+                読む
+              </a>
+
+              <button class="btn btn-mini btn-ghost copy-save"
+                      type="button"
+                      data-raw-url="{{ url_for('saves_public_raw', fname=f.name) }}"
+                      data-fname="{{ f.name }}">
+                コピー
+              </button>
+
+              <form method="post" action="{{ url_for('saves_import') }}">
+                <input type="hidden" name="fname" value="{{ f.name }}">
+                <button type="submit" class="btn btn-mini">
+                  追加
+                </button>
+              </form>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    {% endfor %}
+  </div>
+
+
+</section>
+{% endblock %}

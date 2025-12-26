@@ -55,23 +55,33 @@ document.addEventListener("click", (e) => {
           <img class="ui-icon nav-icon" src="{{ url_for('static', filename='picture/pen.png') }}" alt="" aria-hidden="true">
         </a>
         <a href="{{ url_for('gallery') }}" class="nav-link{% if request.endpoint == 'gallery' %} active{% endif %}">
-          <img class="ui-icon nav-icon" src="{{ url_for('static', filename='picture/upload.png') }}" alt="" aria-hidden="true">
+          <img class="ui-icon nav-icon" src="{{ url_for('static', filename='picture/image.png') }}" alt="" aria-hidden="true">
         </a>
         <a href="{{ url_for('saves_list') }}" class="nav-link{% if request.endpoint in ['saves_list', 'saves_open'] %} active{% endif %}">
           <img class="ui-icon nav-icon" src="{{ url_for('static', filename='picture/copy.png') }}" alt="" aria-hidden="true">
         </a>
-        </a>
-          {% if session.get("user_id") %}
-          <a href="{{ url_for('logout') }}" class="nav-link">ログアウト</a>
-          {% endif %}
+        <a href="{{ url_for('explore') }}" class="nav-link{% if request.endpoint in ['explore','explore_saves','explore_images'] %} active{% endif %}">
+          <img class="ui-icon nav-icon" src="{{ url_for('static', filename='picture/glasses.png') }}" alt="" aria-hidden="true">
         </a>
       </nav>
 
-      {% if request.endpoint == 'preview' %}
-        <a href="{{ url_for('index') }}" class="back-button nav-cta" aria-label="エディタに戻る">
-          <span>メニューに戻る</span>
-        </a>
+      {% if is_preview_like %}
+        <form class="nav-cta preview-mode"
+              method="get"
+              action="{% if ui_endpoint == 'saves_public_view' %}{{ url_for('saves_public_view') }}{% else %}{{ url_for('preview') }}{% endif %}">
+          {% if ui_endpoint == 'saves_public_view' %}
+            <input type="hidden" name="fname" value="{{ ui_fname }}">
+          {% endif %}
+          <input type="hidden" name="p" value="{{ ui_p }}">
+
+          <select name="writing_mode" onchange="this.form.submit()">
+            <option value="horizontal" {% if ui_writing_mode != 'vertical' %}selected{% endif %}>横書き</option>
+            <option value="vertical" {% if ui_writing_mode == 'vertical' %}selected{% endif %}>縦書き</option>
+          </select>
+        </form>
       {% endif %}
+
+
     </div>
   </header>
 
@@ -79,12 +89,12 @@ document.addEventListener("click", (e) => {
     {% if messages %}
       <script>
         (function(){
-          const msgs = {{ messages|tojson }};
+          const msgs = ({ messages,tojson });
           msgs.forEach((pair, i) => {
             const msg = Array.isArray(pair) ? pair[1] : pair;
             setTimeout(() => { window.showToast && showToast(msg); }, i * 300);
           });
-        })();
+        });
       </script>
     {% endif %}
   {% endwith %}
@@ -300,6 +310,34 @@ document.addEventListener("click", (e) => {
       console.warn(err);
     }
   });
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      const btn = document.querySelector('[data-ajax-preview]');
+      if (btn) { e.preventDefault(); btn.click(); }
+    }
+  });
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".copy-save");
+    if(!btn) return;
+
+    const url = btn.dataset.rawUrl;
+    try{
+      const res = await fetch(url, { credentials: "same-origin" });
+      if(!res.ok) throw new Error("fetch failed");
+      const text = await res.text();
+
+      await navigator.clipboard.writeText(text);
+
+      // 軽いフィードバック（既存toastがあるならそれに置き換えてOK）
+      const old = btn.textContent;
+      btn.textContent = "コピー済";
+      btn.classList.add("copied");
+      setTimeout(() => { btn.textContent = old; btn.classList.remove("copied"); }, 900);
+    }catch(err){
+      alert("コピーに失敗しました");
+    }
+  });
+
   </script>
 
 </body>

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel explore-panel explore-gallery">
+
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Explore</span>
+      <h2 class="panel-title">公開画像を探す</h2>
+      <p class="panel-description">公開設定された画像一覧です。</p>
+    </div>
+  </header>
+
+  <div class="explore-tabs">
+    <a class="btn {% if type=='saves' %}is-active{% endif %}"
+       href="{{ url_for('explore', type='saves', q=q) }}">文章</a>
+    <a class="btn {% if type=='images' %}is-active{% endif %}"
+       href="{{ url_for('explore', type='images', q=q) }}">画像</a>
+  </div>
+
+  <form method="get" action="{{ url_for('explore') }}" class="gallery-search" role="search">
+    <input type="hidden" name="type" value="images">
+    <input type="search" name="q" value="{{ q or '' }}"
+           class="gallery-search__input" placeholder="画像タイトル・IDで検索" autocomplete="off">
+    <button type="submit" class="btn">検索</button>
+    {% if q %}
+      <a class="btn" href="{{ url_for('explore', type='images') }}">クリア</a>
+    {% endif %}
+  </form>
+<div class="mg-grid mg-grid-lg">
+  {% for it in items %}
+    <div class="mg-card">
+
+      <div class="mg-thumb">
+        <img src="{{ url_for('image_by_id', img_id=it.id) }}"
+            alt="{{ it.id }}" loading="lazy">
+      </div>
+
+      <div class="mg-body">
+        <div class="mg-id">{{ it.id }}</div>
+        {% if it.owner %}
+          <div class="mg-name">by {{ it.owner }}</div>
+        {% endif %}
+
+        <div class="mg-actions mg-actions--explore">
+          <input class="mg-code mg-code--explore" type="text"
+                value="[uploadedimage:{{ it.id }}]" readonly>
+
+          <button class="mg-btn mg-btn--icon copy" type="button"
+                  data-copy="[uploadedimage:{{ it.id }}]" title="コピー">
+            <img class="ui-icon"
+                src="{{ url_for('static', filename='picture/copy.png') }}"
+                alt="" aria-hidden="true">
+          </button>
+
+          <form method="post" action="{{ url_for('images_import') }}">
+            <input type="hidden" name="img_id" value="{{ it.id }}">
+            <button type="submit" class="mg-btn mg-btn--icon" title="追加">
+              <img class="ui-icon"
+                  src="{{ url_for('static', filename='picture/plus.png') }}"
+                  alt="" aria-hidden="true">
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  {% endfor %}
+</div>
+
+</section>
+{% endblock %}

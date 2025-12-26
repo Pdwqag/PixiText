@@ -23,20 +23,16 @@
       <button type="button" class="ins" data-insert="[jump:2]">[jump]</button>
       <button type="button" class="ins" data-insert="[[jumpuri:タイトル > https://example.com]]">[[jumpuri]]</button>
       <button type="button" class="ins" data-insert="[[rb:漢字 > かんじ]]">[[rb]]</button>
+      <button type="button" class="ins" data-insert="[pixivimage:]">[pixivimage]</button>
+            <!-- プレビュー -->
+      <button type="submit" class="ins ins-preview" data-ajax-preview title="プレビュー (Ctrl+Enter)">
+        <img class="ui-icon" src="{{ url_for('static', filename='picture/keyboard.png') }}" alt="" aria-hidden="true">
+        プレビュー
+      </button>
+
     </div>
 
     <textarea id="text" name="text" rows="18" placeholder="ここに本文">{{ default_text }}</textarea>
-
-    <div class="toolbar">
-      <label>表示方向:
-        <select name="writing_mode">
-          <option value="horizontal" {% if writing_mode == 'horizontal' %}selected{% endif %}>横書き</option>
-          <option value="vertical" {% if writing_mode == 'vertical' %}selected{% endif %}>縦書き</option>
-        </select>
-      </label>
-
-      <!-- プレビュー -->
-      <button type="submit" data-ajax-preview>プレビュー</button>
 
       <!-- ファイル名入力 -->
       <input
@@ -45,24 +41,27 @@
         placeholder="ファイル名（例: story.txt）"
         value="{{ last_filename or '' }}"
       >
+<div class="editor-actions">
+  <a href="{{ url_for('saves_list') }}" class="btn">保存した作品を一覧表示</a>
 
-      <!-- 🔹 一覧表示ボタン（先に来る） -->
-      <a href="{{ url_for('saves_list') }}" class="btn">保存した作品を一覧表示</a>
+  <button
+    type="button"
+    class="btn primary"
+    data-ajax-save
+    data-action="{{ url_for('save_local') }}"
+  >ローカルに保存</button>
 
-      <!-- 🔹 保存ボタン（後に来る） -->
-      <button
-        type="button"
-        class="primary"
-        data-ajax-save
-        data-action="{{ url_for('save_local') }}"
-      >ローカルに保存</button>
+  <button
+    type="submit"
+    class="btn icon-round"
+    formaction="{{ url_for('export') }}"
+    formmethod="post"
+    title="エクスポート"
+  >
+    <img class="ui-icon" src="{{ url_for('static', filename='picture/upload.png') }}" alt="">
+  </button>
+</div>
 
-      <button
-        type="submit"
-        formaction="{{ url_for('export') }}"
-        formmethod="post"
-      >TXTとして保存</button>
-    </div>
 
   </form>
 

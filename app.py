@@ -1,27 +1,37 @@
-import os
+"""PixiText Flask app (cleaned).
+
+This file is a cleaned, runnable re-organization of the user's original app.py.
+Main goals:
+- Fix syntax errors (config.update / stray top-level code).
+- Remove duplicate decorators and imports.
+- Group code by feature with clear section headers.
+- Keep behavior as close as possible to the original.
+
+NOTE:
+- Google Cloud Storage integration remains disabled (stub functions).
+"""
+
+# =========================
+# Imports
+# =========================
+from __future__ import annotations
+
 import json
+import mimetypes
+import os
 import random
 import re
-import time
-import mimetypes
+import shutil
 import threading
-import re
+import time
 from datetime import datetime, timezone
-from werkzeug.security import check_password_hash
-from dotenv import load_dotenv
-load_dotenv()
-import secrets
 from pathlib import Path
-from flask import Response
-from users import create_user, verify_login
-from werkzeug.utils import secure_filename
+from typing import Any, Dict, Optional
 
-
-
-
-
+from dotenv import load_dotenv
 from flask import (
     Flask,
+    Response,
     abort,
     flash,
     jsonify,
@@ -35,14 +45,18 @@ from flask import (
     url_for,
 )
 from flask_session import Session
-from functools import wraps
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash  # kept for compatibility (may be used in users.py)
+from werkzeug.utils import secure_filename
 
 from parser import parse_document
+from users import create_user, verify_login
 
-storage = None
-NotFound = None
-# Google Cloud Storage 関連のコードは一時的に無効化しています。
-# 旧実装では importlib で google.cloud.storage を動的ロードしていました。
+
+# =========================
+# Environment & Paths
+# =========================
+load_dotenv()
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -53,30 +67,57 @@ SAVES_DIR = os.path.join(BASE_DIR, "saves")
 SESSION_DIR = os.path.join(BASE_DIR, "flask_session")
 DB_PATH = os.path.join(UPLOAD_DIR, "uploads.json")
 SAVES_META_PATH = os.path.join(SAVES_DIR, "saves_meta.json")
+USERS_DB_PATH = os.path.join(BASE_DIR, "users.json")
+TRASH_DIR = os.path.join(BASE_DIR, "trash")
+TRASH_UPLOADS_DIR = os.path.join(TRASH_DIR, "uploads")
+TRASH_SAVES_DIR = os.path.join(TRASH_DIR, "saves")
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+TRASH_LOGS_DIR = os.path.join(TRASH_DIR, "logs")
 
-# 必要なディレクトリは必ず作成
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(SAVES_DIR, exist_ok=True)
-os.makedirs(SESSION_DIR, exist_ok=True)
+for d in (
+    UPLOAD_DIR,
+    SAVES_DIR,
+    SESSION_DIR,
+    LOGS_DIR,
+    TRASH_UPLOADS_DIR,
+    TRASH_SAVES_DIR,
+    TRASH_LOGS_DIR,
+):
+    os.makedirs(d, exist_ok=True)
+
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 
-# 1) まずアプリ生成
+
+# =========================
+# Flask App Initialization
+# =========================
 app = Flask(
     __name__,
     static_url_path="/static",
     static_folder=STATIC_DIR,
     template_folder=TEMPLATES_DIR,
 )
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
-# 2) 設定をまとめて投入（重複を避ける）
+# One place to set config
 app.config.update(
-    SECRET_KEY=os.getenv("SECRET_KEY", "change-me"),  # Renderなら環境変数で上書き
+    SECRET_KEY=os.getenv("SECRET_KEY", "change-me"),  # override via env in production
     UPLOAD_FOLDER=UPLOAD_DIR,
+    BUILD_VER=10.3,  # cache buster
+
+    # Flask-Session
     SESSION_TYPE="filesystem",
     SESSION_FILE_DIR=SESSION_DIR,
-    BUILD_VER=10.3,  # キャッシュバスター
-    # Google Cloud Storage 連携は停止中。必要になったら環境変数を再度読み込む。
+    SESSION_PERMANENT=False,
+    SESSION_USE_SIGNER=True,
+
+    # Cookies
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=bool(os.getenv("RENDER")) or bool(os.getenv("CLOUDFLARE")),
+
+    # GCS config placeholders (integration disabled)
     GCS_PROJECT_ID="",
     GCS_BUCKET_NAME="",
     GCS_UPLOAD_PREFIX="",
@@ -85,58 +126,176 @@ app.config.update(
     GCS_SERVICE_ACCOUNT_JSON="",
     GCS_SERVICE_ACCOUNT_EMAIL="",
     GCS_BROWSER_BASE_URL="",
-    SESSION_PERMANENT = False,
-    PERMANENT_SESSION_LIFETIME = 0,
-    SESSION_USE_SIGNER = True,
-    SESSION_COOKIE_SAMESITE = "Lax",
-    SESSION_COOKIE_HTTPONLY = True,
-    SESSION_COOKIE_SECURE = bool(os.getenv("RENDER")) or bool(os.getenv("CLOUDFLARE")),
-    AUTH_LOG_PATH=os.path.join(BASE_DIR, "auth_log.jsonl"),
+    
+    # Logs  ← ここで統一
+    AUTH_LOG_PATH=os.path.join(TRASH_LOGS_DIR, "auth_log.jsonl"),
+    TRASH_LOG_PATH=os.path.join(TRASH_LOGS_DIR, "trash_log.jsonl"),
 )
 
-# 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
 Session(app)
 
+storage = None
+NotFound = None
 
-_CLOUD_MANIFEST_CACHE = {"timestamp": 0.0, "value": None}
+# Manifest cache kept for compatibility with templates
+_CLOUD_MANIFEST_CACHE: Dict[str, Any] = {"timestamp": 0.0, "value": None}
 _CLOUD_MANIFEST_LOCK = threading.Lock()
 
 
-def gcs_upload_file(local_path, filename, *, prefix=None, content_type=None):
-    """Google Cloud Storage 連携のスタブ。
-
-    旧実装では _ensure_gcs_bucket() 経由でアップロードしていましたが、
-    現在はクラウド連携を停止しているため何も行いません。
-    """
-
-    # 旧実装参考:
-    # bucket = _ensure_gcs_bucket()
-    # if bucket is None:
-    #     return None
-    # remote_path = _gcs_build_remote_path(prefix, filename)
-    # blob = bucket.blob(remote_path)
-    # blob.upload_from_filename(local_path, content_type=content_type)
+# =========================
+# Cloud (Disabled / Stubs)
+# =========================
+def gcs_upload_file(local_path: str, filename: str, *, prefix: Optional[str] = None, content_type: Optional[str] = None):
+    """GCS upload stub (disabled)."""
     return None
 
 
-def gcs_delete_blob(filename, *, prefix=None):
-    """Google Cloud Storage 連携のスタブ (削除処理無効化)。"""
-
-    # 旧実装参考:
-    # bucket = _ensure_gcs_bucket()
-    # blob = bucket.blob(remote_path)
-    # blob.delete()
+def gcs_delete_blob(filename: str, *, prefix: Optional[str] = None):
+    """GCS delete stub (disabled)."""
     return None
 
 
-def load_cloud_manifest(*, force_refresh=False):
-    """クラウド連携が無効なため、空のマニフェストを返す。"""
+def load_cloud_manifest(*, force_refresh: bool = False) -> Dict[str, Any]:
+    """Cloud integration disabled: return empty manifest."""
     return {
         "targets": [],
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "gcs": {"enabled": False},
     }
 
+
+# =========================
+# Common Helpers
+# =========================
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _client_ip() -> str:
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.remote_addr or ""
+
+
+def _write_auth_log(event: dict) -> None:
+    path = app.config.get("AUTH_LOG_PATH")
+    if not path:
+        return
+    payload = {
+        **event,
+        "ts": int(time.time()),
+        "iso": datetime.now(timezone.utc).isoformat(),
+        "ip": _client_ip(),
+    }
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        # logging should never break the app
+        pass
+    
+def _write_trash_log(event: dict) -> None:
+    path = app.config.get("TRASH_LOG_PATH")
+    if not path:
+        return
+    payload = {
+        **event,
+        "ts": int(time.time()),
+        "iso": datetime.now(timezone.utc).isoformat(),
+        "ip": _client_ip(),
+        "user_id": session.get("user_id"),
+    }
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+
+# =========================
+# DB Helpers (uploads.json)
+# =========================
+def _load_db() -> Dict[str, Any]:
+    if not os.path.exists(DB_PATH):
+        return {}
+    try:
+        with open(DB_PATH, "r", encoding="utf-8") as f:
+            raw = f.read().strip()
+            return json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
+
+def _save_db(db: Dict[str, Any]) -> None:
+    tmp = DB_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(db, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, DB_PATH)
+
+
+def _gen_id(db: Dict[str, Any]) -> str:
+    while True:
+        nid = f"{random.randint(100000, 999999)}"
+        if nid not in db:
+            return nid
+
+
+# =========================
+# Saves meta (saves_meta.json)
+# =========================
+def _load_saves_meta() -> Dict[str, Any]:
+    if not os.path.exists(SAVES_META_PATH):
+        return {}
+    try:
+        with open(SAVES_META_PATH, "r", encoding="utf-8") as f:
+            raw = f.read().strip()
+            return json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
+
+def _save_saves_meta(meta: Dict[str, Any]) -> None:
+    tmp = SAVES_META_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, SAVES_META_PATH)
+
+
+# =========================
+# Trash Helpers
+# =========================
+def _move_upload_to_trash(img_id: str, rec: Dict[str, Any]) -> Dict[str, Any]:
+    """Move an uploaded image file into trash and mark record."""
+    src = os.path.join(app.config["UPLOAD_FOLDER"], rec["stored_name"])
+    dst = os.path.join(TRASH_UPLOADS_DIR, f"{img_id}__{rec['stored_name']}")
+
+    if os.path.exists(src):
+        shutil.move(src, dst)
+
+    rec["deleted_at"] = int(time.time())
+    rec["trash_path"] = os.path.basename(dst)
+    return rec
+
+
+# =========================
+# Template Context
+# =========================
+@app.context_processor
+def inject_cloud_links():
+    manifest = load_cloud_manifest()
+    return dict(
+        cloud_targets=manifest.get("targets", []),
+        cloud_manifest=manifest,
+        gcs_upload_prefix=app.config.get("GCS_UPLOAD_PREFIX"),
+        gcs_saves_prefix=app.config.get("GCS_SAVES_PREFIX"),
+    )
+
+
+# =========================
+# Auth Gate
+# =========================
 @app.before_request
 def require_login():
     if request.endpoint is None:
@@ -149,6 +308,9 @@ def require_login():
         "uploaded",
         "image_by_id",
         "gallery_public",
+        "saves_public",
+        "saves_public_view",
+        "explore",
     ):
         return
 
@@ -156,81 +318,35 @@ def require_login():
         return redirect(url_for("login", next=request.full_path))
 
 
-
-
+# =========================
+# Cache Control
+# =========================
 @app.after_request
-def _no_cache_static_css(resp):
-    if request.path.endswith("/static/style.css"):
-        resp.headers["Cache-Control"] = "no-store"
+def no_cache_static(resp: Response):
+    p = request.path
+    if p.startswith("/static/") and (p.endswith(".css") or p.endswith(".js")):
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
     return resp
 
+def _move_save_to_trash(fname: str, meta_rec: dict) -> dict:
+    src = os.path.join(SAVES_DIR, fname)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    dst_name = f"{stamp}__{fname}"
+    dst = os.path.join(TRASH_SAVES_DIR, dst_name)
+
+    if os.path.exists(src):
+        shutil.move(src, dst)
+
+    meta_rec["deleted_at"] = int(time.time())
+    meta_rec["trash_path"] = dst_name
+    return meta_rec
 
 
-def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
-
-# === テンプレート共通変数 ===
-def _client_ip():
-    xff = request.headers.get("X-Forwarded-For", "")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.remote_addr or ""
-
-def _write_auth_log(event: dict):
-    path = app.config.get("AUTH_LOG_PATH")
-    if not path:
-        return
-    event = {
-        **event,
-        "ts": int(time.time()),
-        "iso": datetime.now(timezone.utc).isoformat(),
-    }
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(event, ensure_ascii=False) + "\n")
-
-@app.context_processor
-def inject_cloud_links():
-    manifest = load_cloud_manifest()
-    return dict(
-        cloud_targets=manifest.get("targets", []),
-        cloud_manifest=manifest,
-        gcs_upload_prefix=app.config.get("GCS_UPLOAD_PREFIX"),
-        gcs_saves_prefix=app.config.get("GCS_SAVES_PREFIX"),
-    )
-
-
-# --- 簡易DB ---
-def _load_db():
-    if not os.path.exists(DB_PATH): return {}
-    with open(DB_PATH, "r", encoding="utf-8") as f: return json.load(f)
-
-def _save_db(db):
-    with open(DB_PATH, "w", encoding="utf-8") as f: json.dump(db, f, ensure_ascii=False, indent=2)
-
-def _gen_id(db):
-    while True:
-        nid = f"{random.randint(100000,999999)}"
-        if nid not in db: return nid
-
-def _load_saves_meta():
-    if not os.path.exists(SAVES_META_PATH):
-        return {}
-    try:
-        with open(SAVES_META_PATH, "r", encoding="utf-8") as f:
-            raw = f.read().strip()
-            if not raw:
-                return {}
-            return json.loads(raw)
-    except Exception:
-        return {}
-
-def _save_saves_meta(db):
-    tmp = SAVES_META_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(db, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, SAVES_META_PATH)
-
-
-
+# =========================
+# Auth Routes
+# =========================
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
@@ -252,6 +368,7 @@ def signup():
 
         session.clear()
         session["user_id"] = uid
+        _write_auth_log({"event": "signup", "user_id": uid, "username": username})
         return redirect(url_for("index"))
 
     return render_template("signup.html")
@@ -267,17 +384,22 @@ def login():
         uid = verify_login(username, password)
         if not uid:
             flash("ユーザー名またはパスワードが違います")
+            _write_auth_log({"event": "login_failed", "username": username})
             return redirect(url_for("login", next=next_url))
 
         session.clear()
         session["user_id"] = uid
+        _write_auth_log({"event": "login_ok", "user_id": uid, "username": username})
         return redirect(next_url)
 
     return render_template("login.html", next=request.args.get("next", url_for("index")))
 
+
 @app.route("/logout")
 def logout():
+    uid = session.get("user_id")
     session.clear()
+    _write_auth_log({"event": "logout", "user_id": uid})
     return redirect(url_for("login"))
 
 
@@ -286,12 +408,17 @@ def _whoami():
     return {"user_id": session.get("user_id"), "endpoint": request.endpoint}
 
 
+# =========================
+# Static Upload Serving
+# =========================
 @app.route("/uploads/<path:filename>")
 def uploaded(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
-# ギャラリー（一覧）
+# =========================
+# Gallery / Images
+# =========================
 @app.route("/gallery")
 def gallery():
     db = _load_db()
@@ -302,12 +429,14 @@ def gallery():
     for k, v in db.items():
         v = dict(v)
         v.setdefault("visibility", "private")
-        # 古いデータは owner がないので、とりあえず自分のギャラリーに出さない（安全）
-        # → 取り込みたいなら「移行」で owner を付ける
+
+        # Hide trashed/deleted by default
+        if v.get("deleted_at"):
+            continue
+
         if v.get("owner") != uid:
             continue
 
-        # 検索（タイトル/元ファイル名/保存名/ID に部分一致）
         if q:
             hay = " ".join([
                 str(k or ""),
@@ -317,23 +446,122 @@ def gallery():
             ]).lower()
             if q not in hay:
                 continue
+
         items.append({"id": k, **v})
 
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
     return render_template("gallery.html", items=items, q=request.args.get("q", ""))
 
+
 @app.route("/gallery/public")
 def gallery_public():
     db = _load_db()
+    q = (request.args.get("q") or "").strip().lower()
+
     items = []
     for k, v in db.items():
         v = dict(v)
         v.setdefault("visibility", "private")
+        if v.get("deleted_at"):
+            continue
         if v.get("visibility") != "public":
             continue
+
+        if q:
+            hay = " ".join([
+                str(k or ""),
+                str(v.get("title") or ""),
+                str(v.get("original_name") or ""),
+                str(v.get("stored_name") or ""),
+            ]).lower()
+            if q not in hay:
+                continue
+
         items.append({"id": k, **v})
+
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    return render_template("gallery.html", items=items)
+    return render_template("gallery.html", items=items, q=request.args.get("q",""))
+
+
+
+@app.route("/explore")
+def explore():
+    """Public explorer (saves/images)"""
+    t = (request.args.get("type") or "saves").strip()
+    q = (request.args.get("q") or "").strip().lower()
+    if t not in ("saves", "images"):
+        t = "saves"
+
+    # ★ ここで users.json をロード
+    try:
+        with open(USERS_DB_PATH, "r", encoding="utf-8") as f:
+            users_db = json.load(f).get("users", {})
+    except Exception:
+        users_db = {}
+
+    if t == "saves":
+        meta = _load_saves_meta()
+        files = []
+
+        for name in os.listdir(SAVES_DIR):
+            if not name.lower().endswith(".txt"):
+                continue
+
+            m = meta.get(name, {})
+            if m.get("deleted_at"):
+                continue
+
+            if m.get("visibility") != "public":
+                continue
+
+            if q and q not in name.lower():
+                continue
+
+            p = os.path.join(SAVES_DIR, name)
+            if not os.path.isfile(p):
+                continue
+
+            st = os.stat(p)
+
+            # ★ ここが本命：owner_id → username
+            owner_id = m.get("owner", "")
+            owner_name = users_db.get(owner_id, {}).get("username", owner_id)
+
+            files.append({
+                "name": name,
+                "mtime": st.st_mtime,
+                "mtime_str": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                "size_kb": round(st.st_size / 1024, 1),
+                "owner": owner_name,   # ← username が入る
+            })
+
+        files.sort(key=lambda x: -x["mtime"])
+        return render_template(
+            "explore_saves.html",
+            q=request.args.get("q", ""),
+            files=files,
+            type=t
+        )
+
+
+    # images
+    db = _load_db()
+    items = []
+    for img_id, rec in db.items():
+        rec = dict(rec)
+        rec.setdefault("visibility", "private")
+        if rec.get("deleted_at"):
+            continue
+        if rec.get("visibility") != "public":
+            continue
+        title = (rec.get("title") or rec.get("original_name") or rec.get("stored_name") or "")
+        hay = f"{img_id} {title}".lower()
+        if q and q not in hay:
+            continue
+        items.append({"id": img_id, **rec})
+    items.sort(key=lambda x: x.get("ts", 0), reverse=True)
+    return render_template("explore_gallery.html", q=request.args.get("q", ""), items=items, type=t)
+
 
 # IDで解決する画像URL: /image/123456
 @app.route("/image/<img_id>")
@@ -343,8 +571,10 @@ def image_by_id(img_id):
     if not rec:
         abort(404)
 
-    # --- 互換（古いデータ救済） ---
     rec.setdefault("visibility", "private")
+
+    if rec.get("deleted_at"):
+        abort(404)
 
     # private は owner一致のみ
     if rec.get("visibility") == "private":
@@ -385,7 +615,59 @@ def set_visibility(img_id):
     flash(f"公開設定を {vis} にしました")
     return redirect(url_for("gallery"))
 
-@app.route("/", methods=["GET","POST"])
+
+@app.route("/images/import", methods=["POST"])
+def images_import():
+    uid = session.get("user_id")
+    if not uid:
+        return redirect(url_for("login", next=request.full_path))
+
+    src_id = (request.form.get("img_id") or "").strip()
+    db = _load_db()
+    src = db.get(src_id)
+    if not src:
+        abort(404)
+    if src.get("deleted_at"):
+        abort(404)
+    if (src.get("visibility") or "private") != "public":
+        abort(404)
+
+    src_path = os.path.join(app.config["UPLOAD_FOLDER"], src["stored_name"])
+    if not os.path.exists(src_path):
+        abort(404)
+
+    # コピー先ファイル名（衝突回避）
+    root, ext = os.path.splitext(src["stored_name"])
+    cand = f"{root}_import{ext}"
+    i = 1
+    while os.path.exists(os.path.join(app.config["UPLOAD_FOLDER"], cand)):
+        cand = f"{root}_import{i}{ext}"
+        i += 1
+
+    shutil.copy2(src_path, os.path.join(app.config["UPLOAD_FOLDER"], cand))
+
+    new_id = _gen_id(db)
+    db[new_id] = {
+        "stored_name": cand,
+        "original_name": src.get("original_name") or cand,
+        "original_name_safe": src.get("original_name_safe") or cand,
+        "title": src.get("title"),
+        "ts": int(time.time()),
+        "owner": uid,
+        "visibility": "private",
+        "imported_from": src_id,
+        "imported_from_owner": src.get("owner", ""),
+    }
+    _save_db(db)
+
+    flash(f"ギャラリーに追加しました: ID {new_id}")
+    return redirect(url_for("gallery"))
+
+
+# =========================
+# Editor / Index
+# =========================
+@app.route("/", methods=["GET", "POST"])
 def index():
     writing_mode = session.get("last_writing_mode", "horizontal")
     last_filename = session.get("last_filename", "")
@@ -399,12 +681,11 @@ def index():
             flash(f"ファイル読込エラー: {e}")
             default_text = ""
 
-    # ★ ギャラリー用の一覧（新しい順）
+    # Gallery list (owner only, newest first, skip trashed)
     db = _load_db()
     uid = session.get("user_id")
-    gallery_items = [{"id": k, **v} for k, v in db.items() if v.get("owner") == uid]
+    gallery_items = [{"id": k, **v} for k, v in db.items() if v.get("owner") == uid and not v.get("deleted_at")]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-
 
     refresh = request.args.get("cloud_refresh") == "1"
     cloud_manifest = load_cloud_manifest(force_refresh=refresh)
@@ -424,24 +705,27 @@ def index():
     resp.headers["Expires"] = "0"
     return resp
 
+
+# =========================
+# Upload (Images)
+# =========================
 @app.route("/upload", methods=["POST"])
 def upload():
     file = request.files.get("file")
     if not file or file.filename == "":
-        flash("ファイルが選択されていません"); return redirect(url_for("index"))
+        flash("ファイルが選択されていません")
+        return redirect(url_for("gallery"))
     if not allowed_file(file.filename):
-        flash("対応していない拡張子です"); return redirect(url_for("index"))
+        flash("対応していない拡張子です")
+        return redirect(url_for("gallery"))
 
-    # 元名・拡張子
     orig_name = file.filename
-    ext = orig_name.rsplit(".",1)[1].lower()
+    ext = orig_name.rsplit(".", 1)[1].lower()
 
     db = _load_db()
     nid = _gen_id(db)
-    safe_name = secure_filename(orig_name)
-    if not safe_name:
-        safe_name = f"image.{ext}"
 
+    safe_name = secure_filename(orig_name) or f"image.{ext}"
     root, current_ext = os.path.splitext(safe_name)
     if not current_ext:
         current_ext = f".{ext}"
@@ -470,7 +754,6 @@ def upload():
     if gcs_result is False:
         flash("クラウドバックアップ（Google Cloud Storage）に失敗しました。設定を確認してください。")
 
-    # DB登録
     db[nid] = {
         "stored_name": stored_name,
         "original_name": orig_name,
@@ -482,8 +765,12 @@ def upload():
     _save_db(db)
 
     flash(f"アップロード完了: ID {nid}")
-    return redirect(url_for("index"))  # アップ後は一覧へ
+    return redirect(url_for("gallery"))
 
+
+# =========================
+# Preview / Reading
+# =========================
 @app.route("/preview", methods=["GET", "POST"])
 def preview():
     if request.method == "POST":
@@ -492,6 +779,12 @@ def preview():
         return redirect(url_for("preview"))
 
     text = session.get("last_text", "")
+
+    # ★ 追加：GETパラメータを優先して反映
+    req_mode = (request.args.get("writing_mode") or "").strip()
+    if req_mode in ("horizontal", "vertical"):
+        session["last_writing_mode"] = req_mode
+
     writing_mode = session.get("last_writing_mode", "horizontal")
 
     if not text:
@@ -518,8 +811,7 @@ def preview():
         p = max(1, min(len(pages), p))
         page = pages[p - 1]
         total = len(pages)
-    
-    
+
     raw_text = page.get("text", "")
 
     m = re.match(r"^\s*\[chapter:(.+?)\]\s*(?:\r?\n)*", raw_text)
@@ -530,18 +822,11 @@ def preview():
         chapter_title = None
         body_text = raw_text
 
-    page = {
-        **page,
-        "chapter": chapter_title,
-        "text": body_text,
-    }
-
+    page = {**page, "chapter": chapter_title, "text": body_text}
 
     nums = list(range(1, total + 1)) if total > 0 else []
-
     prev_p = 1 if p <= 1 else p - 1
     next_p = total if p >= total else p + 1
-
 
     return render_template(
         "preview.html",
@@ -555,6 +840,7 @@ def preview():
         writing_mode=writing_mode,
         text=text,
     )
+
 
 @app.route("/api/preview_page", methods=["GET", "POST"])
 def api_preview_page():
@@ -597,12 +883,9 @@ def api_preview_page():
         chapter_title = None
         body_text = raw_text
 
-    page = {
-        **page,
-        "chapter": chapter_title,
-        "text": body_text,
-    }
+    page = {**page, "chapter": chapter_title, "text": body_text}
 
+    # Remove duplicated chapter rendering in html (defensive)
     html0 = page.get("html", "")
     html0 = re.sub(
         r'^\s*<[^>]*class="chapter"[^>]*>.*?</[^>]+>\s*',
@@ -627,17 +910,6 @@ def api_preview_page():
         writing_mode=writing_mode,
     )
 
-
-
-@app.route("/export", methods=["POST"])
-def export():
-    text = request.form.get("text","")
-    writing_mode = request.form.get("writing_mode","horizontal")
-    session['last_text'] = text; session['last_writing_mode'] = writing_mode
-    out_path = os.path.join(BASE_DIR, "export.txt")
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    return send_file(out_path, as_attachment=True, download_name="export.txt", mimetype="text/plain")
 
 @app.route("/read")
 def read_single():
@@ -675,114 +947,146 @@ def read_single():
         writing_mode=writing_mode,
     )
 
-@app.route("/delete_image/<img_id>", methods=["POST"])
-def delete_image(img_id):
+
+# =========================
+# Export
+# =========================
+@app.route("/export", methods=["POST"])
+def export():
+    text = request.form.get("text", "")
+    writing_mode = request.form.get("writing_mode", "horizontal")
+    session["last_text"] = text
+    session["last_writing_mode"] = writing_mode
+    out_path = os.path.join(BASE_DIR, "export.txt")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return send_file(out_path, as_attachment=True, download_name="export.txt", mimetype="text/plain")
+
+
+# =========================
+# Delete / Trash (Images)
+# =========================
+@app.route("/trash_image/<img_id>", methods=["POST"])
+def trash_image(img_id):
+    """Move image to trash (soft delete)."""
     db = _load_db()
     rec = db.get(img_id)
     if not rec:
         flash(f"ID {img_id} の画像が見つかりませんでした。")
-        dest = request.args.get("next", "index")
-        return redirect(url_for(dest) if dest in ("index", "gallery") else url_for("index"))
+        return redirect(url_for("gallery"))
 
     uid = session.get("user_id")
     if rec.get("owner") != uid:
         abort(403)
 
-    # ファイル削除（存在しなくてもスルー）
     try:
-        os.remove(os.path.join(app.config["UPLOAD_FOLDER"], rec["stored_name"]))
-    except FileNotFoundError:
-        pass
+        rec = _move_upload_to_trash(img_id, rec)
     except Exception as e:
-        flash(f"ファイル削除時にエラー: {e}")
+        flash(f"ゴミ箱移動に失敗: {e}")
+        return redirect(url_for("gallery"))
 
-    gcs_result = gcs_delete_blob(
-        rec.get("stored_name"),
-        prefix=app.config.get("GCS_UPLOAD_PREFIX"),
-    )
-    if gcs_result is False:
-        flash("クラウドバックアップ（Google Cloud Storage）の削除に失敗しました。")
-
-    db.pop(img_id, None)
+    db[img_id] = rec
     _save_db(db)
 
-    flash(f"ID {img_id} を削除しました。")
-    dest = request.args.get("next", "index")
-    return redirect(url_for(dest) if dest in ("index", "gallery") else url_for("index"))
+    _write_trash_log({
+        "event": "trash_image",
+        "img_id": img_id,
+        "trash_path": rec.get("trash_path"),
+        "owner": uid,
+    })
+
+    flash(f"ゴミ箱に移動しました: {img_id}")
+    return redirect(url_for("gallery"))
 
 
-# 末尾の他ルートと同じ場所に追記
-# === 保存をエディタへ読み込む =========================
-@app.route("/saves/open")
-def saves_open():
-    fname = request.args.get("fname", "").strip()
-    fname = os.path.basename(fname)
+@app.route("/trash_save", methods=["POST"])
+def trash_save():
+    uid = session.get("user_id")
+    fname = os.path.basename((request.form.get("fname") or "").strip())
     if not fname or not fname.lower().endswith(".txt"):
-        flash("不正なファイル名です"); return redirect(url_for("saves_list"))
+        abort(400)
 
-    path = os.path.join(SAVES_DIR, fname)
-    if not os.path.exists(path):
-        flash("ファイルが見つかりません"); return redirect(url_for("saves_list"))
+    meta = _load_saves_meta()
+    rec = meta.get(fname, {})
+    if rec.get("owner") != uid:
+        abort(403)
 
-    # ★ ここで本文は session に入れない
-    session["last_filename"] = fname
-    flash(f"読み込みました: {fname}")
-    return redirect(url_for("index"))
+    rec = _move_save_to_trash(fname, rec)
+    meta[fname] = rec
+    _save_saves_meta(meta)
 
+    _write_trash_log({
+        "event": "trash_save",
+        "fname": fname,
+        "trash_path": rec.get("trash_path"),
+    })
 
-# === 保存ファイルを削除 ===============================
-@app.route("/saves/delete", methods=["POST"])
-def saves_delete():
-    fname = request.form.get("fname", "").strip()
-    fname = os.path.basename(fname)
-    if not fname or not fname.lower().endswith(".txt"):
-        flash("不正なファイル名です"); return redirect(url_for("saves_list"))
-
-    path = os.path.join(SAVES_DIR, fname)
-    try:
-        if os.path.exists(path):
-            os.remove(path)
-            flash(f"削除しました: {fname}")
-        else:
-            flash("ファイルが見つかりません")
-    except Exception as e:
-        flash(f"削除に失敗しました: {e}")
-        remove_remote = False
-    else:
-        remove_remote = True
-
-    if remove_remote:
-        gcs_result = gcs_delete_blob(
-            fname,
-            prefix=app.config.get("GCS_SAVES_PREFIX"),
-        )
-        if gcs_result is False:
-            flash("クラウドバックアップ（Google Cloud Storage）の削除に失敗しました。")
+    flash("ゴミ箱に移動しました")
     return redirect(url_for("saves_list"))
 
+@app.route("/delete_image/<img_id>", methods=["POST"])
+def delete_image(img_id):
+    return trash_image(img_id)
+
+# @app.route("/delete_image/<img_id>", methods=["POST"])
+# def delete_image(img_id):
+#     """Permanent delete (kept for compatibility)."""
+#     db = _load_db()
+#     rec = db.get(img_id)
+#     if not rec:
+#         flash(f"ID {img_id} の画像が見つかりませんでした。")
+#         dest = request.args.get("next", "index")
+#         return redirect(url_for(dest) if dest in ("index", "gallery") else url_for("index"))
+
+#     uid = session.get("user_id")
+#     if rec.get("owner") != uid:
+#         abort(403)
+
+#     # file delete
+#     try:
+#         os.remove(os.path.join(app.config["UPLOAD_FOLDER"], rec["stored_name"]))
+#     except FileNotFoundError:
+#         pass
+#     except Exception as e:
+#         flash(f"ファイル削除時にエラー: {e}")
+
+#     gcs_result = gcs_delete_blob(rec.get("stored_name"), prefix=app.config.get("GCS_UPLOAD_PREFIX"))
+#     if gcs_result is False:
+#         flash("クラウドバックアップ（Google Cloud Storage）の削除に失敗しました。")
+
+#     db.pop(img_id, None)
+#     _save_db(db)
+
+#     flash(f"ID {img_id} を削除しました。")
+#     dest = request.args.get("next", "index")
+#     return redirect(url_for(dest) if dest in ("index", "gallery") else url_for("index"))
+
+
+# =========================
+# Saves
+# =========================
 @app.route("/save_local", methods=["POST"])
 def save_local():
-    import re, os
     text = request.form.get("text", "")
     raw_name = (request.form.get("filename", "") or "").strip()
 
-    # ファイル名サニタイズ + .txt 付与
-    name = re.sub(r'[\\/:*?"<>|]+', "_", raw_name).replace("\0","")
+    # sanitize filename + add .txt
+    name = re.sub(r'[\\/:*?"<>|]+', "_", raw_name).replace("\0", "")
     if not name:
         name = "untitled.txt"
     if not name.lower().endswith(".txt"):
         name += ".txt"
     name = os.path.basename(name)
 
-    saves_dir = os.path.join(BASE_DIR, "saves")
-    os.makedirs(saves_dir, exist_ok=True)
-    path = os.path.join(saves_dir, name)
+    path = os.path.join(SAVES_DIR, name)
 
     try:
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
+
         session["last_text"] = text
         session["last_filename"] = name
+
         meta = _load_saves_meta()
         rec = meta.get(name, {})
         rec.setdefault("owner", session.get("user_id"))
@@ -792,21 +1096,14 @@ def save_local():
         meta[name] = rec
         _save_saves_meta(meta)
 
-        payload = dict(
-            success=True,
-            message=f"「{name}」を保存しました",
-            filename=name,
-        )
-        gcs_result = gcs_upload_file(
-            path,
-            name,
-            prefix=app.config.get("GCS_SAVES_PREFIX"),
-            content_type="text/plain; charset=utf-8",
-        )
+        payload: Dict[str, Any] = dict(success=True, message=f"「{name}」を保存しました", filename=name)
+
+        gcs_result = gcs_upload_file(path, name, prefix=app.config.get("GCS_SAVES_PREFIX"), content_type="text/plain; charset=utf-8")
         if gcs_result:
             payload["cloud_synced"] = True
         elif gcs_result is False:
             payload["cloud_warning"] = "Google Cloud Storage へのバックアップに失敗しました。設定を確認してください。"
+
         return jsonify(**payload)
     except Exception as e:
         return jsonify(success=False, message=f"保存に失敗：{e}"), 500
@@ -824,8 +1121,6 @@ def saves_list():
             if not name.lower().endswith(".txt"):
                 continue
 
-
-            # 検索（ファイル名に部分一致。大文字小文字は無視）
             if q and (q not in name.lower()):
                 continue
 
@@ -834,8 +1129,9 @@ def saves_list():
                 continue
 
             m = meta.get(name, {})
-            # owner が付いていて、他人のものなら表示しない
-            if m.get("owner") and m.get("owner") != uid:
+            if m.get("deleted_at"):
+                continue
+            if m.get("owner") != uid:
                 continue
 
             st = os.stat(p)
@@ -849,14 +1145,61 @@ def saves_list():
                 "pinned": bool(m.get("pinned", False)),
             })
 
-        # ピン → 新しい順
         files.sort(key=lambda x: (not x["pinned"], -x["mtime"]))
-
     except Exception as e:
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
 
-    return render_template("saves.html", files=files, q=request.args.get("q",""))
+    return render_template("saves.html", files=files, q=request.args.get("q", ""))
+
+
+@app.route("/saves/open")
+def saves_open():
+    uid = session.get("user_id")
+    fname = os.path.basename((request.args.get("fname", "") or "").strip())
+
+    if not fname or not fname.lower().endswith(".txt"):
+        flash("不正なファイル名です")
+        return redirect(url_for("saves_list"))
+
+    path = os.path.join(SAVES_DIR, fname)
+    if not os.path.exists(path):
+        flash("ファイルが見つかりません")
+        return redirect(url_for("saves_list"))
+
+    meta = _load_saves_meta()
+    rec = meta.get(fname)
+
+    if not rec or rec.get("owner") != uid:
+        flash("このファイルを開く権限がありません")
+        return redirect(url_for("saves_list"))
+
+    session["last_filename"] = fname
+    flash(f"読み込みました: {fname}")
+    return redirect(url_for("index"))
+
+@app.get("/saves_public_raw/<path:fname>")
+def saves_public_raw(fname):
+    # 公開ディレクトリのパスはあなたの実装に合わせて変更
+    public_dir = Path(SAVES_DIR)   # 例: BASE_DIR/"public_saves"
+    p = (public_dir / fname).resolve()
+
+    # ディレクトリ外参照対策
+    if public_dir.resolve() not in p.parents and p != public_dir.resolve():
+      abort(403)
+
+    if not p.exists() or not p.is_file():
+      abort(404)
+
+    text = p.read_text(encoding="utf-8", errors="replace")
+    return Response(text, mimetype="text/plain; charset=utf-8")
+
+
+@app.route("/saves/delete", methods=["POST"])
+def saves_delete():
+    return trash_save()
+
+
 
 @app.route("/saves/visibility", methods=["POST"])
 def saves_set_visibility():
@@ -910,25 +1253,163 @@ def saves_toggle_pin():
     return redirect(url_for("saves_list"))
 
 
+@app.route("/saves/public")
+def saves_public():
+    meta = _load_saves_meta()
+    q = (request.args.get("q") or "").strip().lower()
+
+    files = []
+    try:
+        for name in os.listdir(SAVES_DIR):
+            if not name.lower().endswith(".txt"):
+                continue
+
+            m = meta.get(name, {})
+            if m.get("deleted_at"):
+                continue
+
+            if m.get("visibility") != "public":
+                continue
+
+            if q and (q not in name.lower()):
+                continue
+
+            p = os.path.join(SAVES_DIR, name)
+            if not os.path.isfile(p):
+                continue
+
+            st = os.stat(p)
+            files.append({
+                "name": name,
+                "size": st.st_size,
+                "size_kb": round(st.st_size / 1024, 1),
+                "mtime": st.st_mtime,
+                "mtime_str": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
+            })
+
+        files.sort(key=lambda x: -x["mtime"])
+    except Exception as e:
+        flash(f"公開保存一覧の取得に失敗しました: {e}")
+        files = []
+
+    return render_template("saves_public.html", files=files, q=request.args.get("q", ""))
+
+
+@app.route("/saves/public/view")
+def saves_public_view():
+    fname = request.args.get("fname", "")
+    if not fname:
+        abort(404)
+
+    path = os.path.join(SAVES_DIR, fname)
+    if not os.path.isfile(path):
+        abort(404)
+
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    # ★ ページ分割
+    pages = parse_document(text)
+    if not pages:
+        abort(404)
+
+    # ★ ページ番号
+    p = max(1, int(request.args.get("p", 1)))
+    p = min(p, len(pages))
+
+    page = pages[p - 1]        # ← これが page
+    prev_p = max(1, p - 1)
+    next_p = min(len(pages), p + 1)
+
+    nums = range(1, len(pages) + 1)
+
+    writing_mode = request.args.get("writing_mode", "horizontal")
+
+    return render_template(
+        "saves_public_view.html",
+        fname=fname,
+        page=page,              # ← 必ず渡す
+        p=p,
+        prev_p=prev_p,
+        next_p=next_p,
+        nums=nums,
+        writing_mode=writing_mode,
+    )
+
+@app.context_processor
+def inject_preview_like():
+    ep = request.endpoint or ""
+    is_preview_like = ep in ("preview", "saves_public_view")
+
+    # 画面の現在値（無ければ安全なデフォルト）
+    p = request.args.get("p") or 1
+    fname = request.args.get("fname") or ""
+
+    # writing_mode は URL を最優先、無ければ session の最後、無ければ horizontal
+    mode = (request.args.get("writing_mode") or session.get("last_writing_mode") or "horizontal").strip()
+    if mode not in ("horizontal", "vertical"):
+        mode = "horizontal"
+
+    return {
+        "is_preview_like": is_preview_like,
+        "ui_p": p,
+        "ui_fname": fname,
+        "ui_writing_mode": mode,
+        "ui_endpoint": ep,
+    }
+
+
+@app.route("/saves/import", methods=["POST"])
+def saves_import():
+    uid = session.get("user_id")
+    if not uid:
+        return redirect(url_for("login", next=request.full_path))
+
+    fname = os.path.basename((request.form.get("fname") or "").strip())
+    if not fname.lower().endswith(".txt"):
+        abort(400)
+
+    meta = _load_saves_meta()
+    src_rec = meta.get(fname, {})
+    if src_rec.get("visibility") != "public":
+        abort(404)
+
+    src_path = os.path.join(SAVES_DIR, fname)
+    if not os.path.exists(src_path):
+        abort(404)
+
+    base, ext = os.path.splitext(fname)
+    new_name = f"{base}_import{ext}"
+    i = 1
+    while os.path.exists(os.path.join(SAVES_DIR, new_name)):
+        new_name = f"{base}_import{i}{ext}"
+        i += 1
+
+    shutil.copy2(src_path, os.path.join(SAVES_DIR, new_name))
+
+    meta[new_name] = {
+        "owner": uid,
+        "visibility": "private",
+        "pinned": False,
+        "updated_at": int(time.time()),
+        "imported_from": fname,
+        "imported_from_owner": src_rec.get("owner", ""),
+    }
+    _save_saves_meta(meta)
+
+    flash(f"取り込みました: {new_name}")
+    return redirect(url_for("saves_list"))
+
+
 @app.route("/saves/auto_open")
 def saves_auto_open():
-    # 何もしない：204 No Contentで返す
     return ("", 204)
 
-@app.after_request
-def _no_cache_static(resp):
-    from flask import request
-    p = request.path
-    # CSS/JS は常に最新版
-    if p.startswith('/static/') and (p.endswith('.css') or p.endswith('.js')):
-        resp.headers['Cache-Control'] = 'no-store, max-age=0'
-        resp.headers['Pragma'] = 'no-cache'
-        resp.headers['Expires'] = '0'
-    return resp
 
+# =========================
+# Entrypoint
+# =========================
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", "7860"))  # ← Render が渡すPORTを尊重
-    # 0.0.0.0 で待ち受け（127.0.0.1固定はNG）
+    port = int(os.environ.get("PORT", "7860"))  # Render's PORT respected
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
 

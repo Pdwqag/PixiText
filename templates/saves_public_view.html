@@ -1,32 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel panel--preview-page {{ 'wm-vertical' if writing_mode == 'vertical' else 'wm-horizontal' }}">
+
   <header class="panel-heading">
     <div class="panel-heading__text">
-      <span class="panel-kicker">Live Preview</span>
-      <h2 class="panel-title">プレビュー</h2>
-      <p class="panel-description">できる限りpixivのものに揃えています</p>
+      <span class="panel-kicker">Explore</span>
+      <h2 class="panel-title">{{ fname }}</h2>
+      <p class="panel-description">公開作品の閲覧ページです。</p>
     </div>
   </header>
 
   <div class="rendered">
     <div class="page-html">
-      {{ page.html
-          | replace('[chapter:' ~ page.chapter ~ ']', '')
-          | safe
-      }}
+      {{ (page.html or '') | safe }}
     </div>
   </div>
+
   <div class="bottom-pager">
     <div class="pager-center">
-      <a class="page-arrow prev" href="{{ url_for('preview', p=prev_p, writing_mode=writing_mode) }}">&lsaquo;</a>
+      <a class="page-arrow prev"
+         href="{{ url_for('saves_public_view', fname=fname, p=prev_p, writing_mode=writing_mode) }}">&lsaquo;</a>
 
       {% for i in nums %}
         <a class="page-number {% if i == p %}active{% endif %}"
-          href="{{ url_for('preview', p=i, writing_mode=writing_mode) }}">{{ i }}</a>
+           href="{{ url_for('saves_public_view', fname=fname, p=i, writing_mode=writing_mode) }}">{{ i }}</a>
       {% endfor %}
 
-      <a class="page-arrow next" href="{{ url_for('preview', p=next_p, writing_mode=writing_mode) }}">&rsaquo;</a>
+      <a class="page-arrow next"
+         href="{{ url_for('saves_public_view', fname=fname, p=next_p, writing_mode=writing_mode) }}">&rsaquo;</a>
     </div>
   </div>
 
@@ -38,9 +39,8 @@
 
     if (isVertical) {
       box.addEventListener("wheel", (e) => {
-        if (e.shiftKey) return; // Shift+ホイールは通常の横スクロールとして尊重
-        const dx = e.deltaX;
-        const dy = e.deltaY;
+        if (e.shiftKey) return;
+        const dx = e.deltaX, dy = e.deltaY;
         if (Math.abs(dy) > Math.abs(dx)) {
           box.scrollLeft += dy;
           e.preventDefault();
@@ -50,6 +50,5 @@
   });
   </script>
 
-  
 </section>
 {% endblock %}

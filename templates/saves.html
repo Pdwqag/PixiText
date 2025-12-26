@@ -34,7 +34,7 @@
                   data-current="{{ vis }}">
               <input type="hidden" name="fname" value="{{ f.name }}">
               <input type="hidden" name="visibility" value="{{ vis }}">
-              <button type="button" class="corner-btn" title="公開範囲を切り替え">
+              <button type="submit" class="corner-btn" title="公開範囲を切り替え">
                 {% if vis == 'public' %}
                   <img src="{{ url_for('static', filename='picture/earth.png') }}">
                 {% elif vis == 'unlisted' %}
