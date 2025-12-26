@@ -178,7 +178,7 @@ select:focus{
 }
 
 .site-brand__icon::after{
-  content:"★";
+  content:"👽️";
   position:absolute;
   inset:0;
   display:grid;
@@ -1129,4 +1129,840 @@ a.jump{ text-decoration:underline; cursor:pointer; }
     inset 0 1px 0 rgba(255, 255, 255, .04),
     0 18px 36px rgba(4, 10, 24, .45);
   resize: vertical;
+}
+
+.bottom-pager {
+  margin-top: 24px;
+}
+.page-text__area.autosize {
+  overflow: hidden;   /* 中スクロールを無効化 */
+  resize: none;       /* ユーザーの手動リサイズも不要なら */
+}
+
+.chapter-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #ffffff;
+
+  padding: 12px 16px;
+  margin-bottom: 16px;
+
+  border-left: 4px solid #4da3ff;
+  background: linear-gradient(
+    to right,
+    rgba(77,163,255,0.15),
+    rgba(77,163,255,0.02)
+  );
+
+  letter-spacing: 0.05em;
+}
+
+/* 縦書きON */
+.wm-vertical .page-text__area {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  line-height: 1.9;
+  white-space: pre-wrap;
+}
+
+/* 横書きON（念のため） */
+.wm-horizontal .page-text__area {
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  overflow: hidden;
+}
+
+/* 縦書き時の本文ボックスを縦長にする */
+.wm-vertical .page-text__area {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+
+  flex: 1 1 auto;
+  width: auto;
+
+  /* 縦書きは「高さ(=行の長さ)」を制限しないと横に増えない */
+  height: 70vh;          /* ★ max-height じゃなく height 推奨 */
+  min-height: 60vh;
+
+  line-height: 1.9;
+  letter-spacing: 0.05em;
+  white-space: pre-wrap;
+
+  overflow: auto;        /* ★スクロールさせる */
+  resize: none;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* 横書き時の章タイトル（今まで通り） */
+.chapter-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #ffffff;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-left: 4px solid #4da3ff;
+  background: linear-gradient(
+    to right,
+    rgba(77,163,255,0.15),
+    rgba(77,163,255,0.02)
+  );
+  letter-spacing: 0.05em;
+}
+
+/* 縦書き時の章タイトル */
+.wm-vertical .chapter-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+
+  flex: 0 0 auto;     /* 本文に押されない */
+  min-height: 60vh;   /* 本文と高さを揃える */
+  padding: 8px 6px;
+
+  border-top: none;
+  border-right: 3px solid #4da3ff; /* 縦書き用アクセント */
+  margin: 0;
+
+  background: linear-gradient(
+    to bottom,
+    rgba(77,163,255,0.15),
+    rgba(77,163,255,0.02)
+  );
+}
+
+.wm-vertical .rendered {
+  display: flex;
+  flex-direction: row-reverse; /* 右→左に配置（和文向け） */
+  gap: 24px;
+  align-items: stretch;
+}
+
+.page-html{
+  white-space: pre-wrap;
+  line-height: 1.9;
+}
+
+.page-html a{
+  text-decoration: underline;
+}
+
+.wm-vertical .page-html{
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.page-box{
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 14px;
+  padding: 18px 20px;
+  background: rgba(0,0,0,0.12);
+  white-space: pre-wrap;
+  line-height: 1.9;
+}
+
+/* 縦書き時も本文として表示 */
+.wm-vertical .page-box{
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.blankline + .blankline {
+  display: none;
+}
+
+/* 章タイトルの直前に blankline があったら消す */
+.blankline + .chapter,
+.blankline + .chapter-title {
+  margin-top: 0;
+}
+
+/* blankline 自体も弱める */
+.blankline {
+  height: 0;
+}
+
+
+/* 本文HTMLのスクロール箱を作る（プレビュー専用） */
+.panel--preview-page .page-html{
+  max-height: 72vh;     /* 好みで 60〜80vh */
+  overflow: auto;       /* 縦も横もスクロール可能に */
+  padding-right: 6px;   /* スクロールバーと文字の干渉回避（任意） */
+}
+
+/* 長いURLや英数字でレイアウトが死ぬのを防ぐ */
+.panel--preview-page .page-html{
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ===== Select（表示方向）を読みやすく ===== */
+.toolbar select{
+  background: linear-gradient(180deg, rgba(15,26,48,.90), rgba(8,14,28,.96));
+  color: var(--fg);
+  border: 1px solid rgba(120,160,220,.34);
+  border-radius: 12px;
+  padding: 10px 38px 10px 14px; /* 右は矢印ぶん余裕 */
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+/* ドロップダウンの候補（効く環境では効く） */
+.toolbar select option{
+  background: #0b1220;
+  color: #eef3ff;
+}
+
+/* フォーカス時をわかりやすく */
+.toolbar select:focus{
+  outline: none;
+  border-color: rgba(120,170,255,.75);
+  box-shadow: 0 0 0 3px rgba(101,177,255,.18);
+}
+
+/* ===== Auth (login) ===== */
+.auth{
+  min-height: calc(100vh - 80px);
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.auth-card{
+  width: min(520px, 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,.12);
+}
+
+.auth-head{
+  padding-bottom: 8px;
+}
+
+.auth-kicker{
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  opacity: .7;
+  margin-bottom: 6px;
+}
+
+.auth-form{
+  padding: 16px 18px 6px;
+}
+
+.auth-label{
+  display: block;
+  margin: 12px 0 6px;
+  font-size: 13px;
+  opacity: .9;
+}
+
+.auth-field{
+  position: relative;
+}
+
+.auth-input{
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.15);
+  background: rgba(255,255,255,.9);
+  outline: none;
+}
+
+.auth-input:focus{
+  border-color: rgba(0,0,0,.35);
+  box-shadow: 0 0 0 4px rgba(0,0,0,.08);
+}
+
+.auth-actions{
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.auth-btn{
+  min-width: 120px;
+  border-radius: 12px;
+}
+
+.auth-link{
+  opacity: .75;
+  text-decoration: none;
+}
+
+.auth-link:hover{
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.auth-alert{
+  margin: 12px 18px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 0, 0, .08);
+  border: 1px solid rgba(255, 0, 0, .18);
+}
+
+.auth-alert__item{
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-foot{
+  padding: 10px 18px 16px;
+  opacity: .75;
+}
+
+.auth .panel{
+  overflow: visible;
+}
+
+/* ===== Auth (login) ===== */
+.auth{
+  min-height: calc(100vh - 80px);
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+/* login.html では .auth-card に .panel も付いてるので、
+   ここは“panelのトーン”に寄せて枠/影だけ整える */
+.auth-card{
+  width: min(520px, 100%);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid rgba(118,154,220,.22);
+  box-shadow: 0 28px 64px rgba(5,12,28,.58);
+}
+
+.auth-head{ padding-bottom: 8px; }
+
+.auth-kicker{
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  opacity: .75;
+  margin-bottom: 6px;
+}
+
+.auth-form{ padding: 16px 18px 6px; }
+
+.auth-label{
+  display: block;
+  margin: 12px 0 6px;
+  font-size: 13px;
+  color: rgba(205,220,245,.76);
+}
+
+.auth-field{ position: relative; }
+
+/* 入力欄をサイト全体のinput/textareaと同じトーンに */
+.auth-input{
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(96,128,190,.28);
+  background: linear-gradient(180deg, rgba(14,25,45,.85), rgba(8,14,26,.90));
+  color: var(--fg);
+  outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.auth-input::placeholder{
+  color: rgba(170,190,220,.7);
+}
+
+.auth-input:focus{
+  border-color: rgba(120,170,255,.70);
+  box-shadow: 0 0 0 3px rgba(101,177,255,.15);
+}
+
+.auth-actions{
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.auth-btn{
+  min-width: 120px;
+  border-radius: 12px;
+}
+
+.auth-link{
+  opacity: .8;
+  text-decoration: none;
+  color: rgba(220,230,255,.85);
+}
+
+.auth-link:hover{
+  opacity: 1;
+  text-decoration: underline;
+  color: #fff;
+}
+
+.auth-alert{
+  margin: 12px 18px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(240,106,122,.10);
+  border: 1px solid rgba(240,106,122,.22);
+}
+
+.auth-alert__item{
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-foot{
+  padding: 10px 18px 16px;
+  color: rgba(210,220,240,.70);
+}
+
+.auth .panel{ overflow: visible; }
+
+/* pixiv挿絵の「作品を開く」表記を小さくする */
+figure.pixiv-illustration figcaption {
+  font-size: 0.75em;      /* 全体を小さく */
+  opacity: 0.7;           /* 少し控えめに */
+  margin-top: 0.25em;
+}
+
+figure.pixiv-illustration figcaption a {
+  font-size: inherit;     /* 親に合わせる */
+  text-decoration: none;
+}
+
+/* ===== スマホではサイト上部ヘッダーを消す ===== */
+@media (max-width: 768px) {
+  .site-header {
+    display: none !important;
+  }
+
+  /* ヘッダーが消えた分、上の余白も詰める */
+  .site-main {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .back-button.nav-cta {
+    padding: 6px 10px !important;
+    min-width: 0 !important;
+    width: auto !important;
+    font-size: 0.9em;
+    gap: 6px;
+  }
+}
+
+/* =========================================================
+   Saves：一覧を見やすく整える（最終調整）
+   影・余白・文字階層・アクション整理
+   ========================================================= */
+
+.saves-list{
+  display: grid;
+  gap: 16px;
+}
+
+/* カード全体：余白と高さのムラを消す */
+.saves-list .mg-card{
+  max-width: 980px;
+  margin: 0 auto;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(140,190,255,.18);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(120,180,255,.12), transparent 45%),
+    linear-gradient(
+      180deg,
+      rgba(18,28,54,.94)   0%,
+      rgba(16,25,48,.94)  35%,
+      rgba(13,21,40,.95)  65%,
+      rgba(9,16,32,.96)  100%
+    );
+  box-shadow: 0 18px 46px rgba(3,8,20,.55);
+}
+
+/* タイトル(ファイル名)とメタを“ヘッダー”として整列 */
+.saves-list .mg-body{
+  padding: 18px 18px 14px;
+  display: grid;
+  gap: 10px;
+  /* 角アイコンの分だけ左右と上に余白 */
+  padding-top: 22px;
+  padding-left: 58px;
+  padding-right: 58px;
+  background: transparent;
+}
+
+.saves-list .mg-id{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  font-size: 1.05rem;
+}
+
+/* メタ情報は読みやすいチップに（横幅が暴れない） */
+.saves-list .mg-name{
+  margin-top: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(120,180,255,.10);
+  border: 1px solid rgba(120,180,255,.16);
+  color: rgba(225,235,255,.78);
+  font-size: .86rem;
+}
+
+/* 区切り線が角丸に食い込まないように */
+/* save-controls 自体の境界感も弱める */
+.saves-list .save-controls{
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: none;
+}
+/* 区切り線を完全に無効化 */
+.saves-list .save-controls::before{
+  display: none;
+}
+
+/* 右側ボタン群はまとまり＋押しやすさ */
+.saves-list .save-actions{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* miniボタンを“アイコンボタン”として統一（主張を落とす） */
+.saves-list .btn.btn-mini{
+  width: 44px;
+  height: 40px;
+  padding: 0;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: none;
+}
+
+.saves-list .btn.btn-mini:hover{
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(140,190,255,0.45);
+}
+
+/* ピン：背景を消して“UIのノイズ”を減らす */
+.saves-list .pin-form .btn.btn-mini{
+  background: transparent;
+  border-color: rgba(255,255,255,0.12);
+}
+
+/* 角アイコン：余白に馴染ませる（ギャラリーと同じ） */
+.saves-list .corner-left{ top: 10px; left: 10px; }
+.saves-list .corner-right{ top: 10px; right: 10px; }
+
+/* 角ボタンは少し小さめにして“邪魔さ”を減らす */
+.saves-list .corner-btn{
+  padding: 6px;
+  border-radius: 10px;
+  
+}
+.saves-list .corner-btn img{
+  width: 16px;
+  height: 16px;
+}
+
+/* モバイル：操作を2段にして押しやすく */
+@media (max-width: 560px){
+  .saves-list .save-controls{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .saves-list .save-actions{
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+
+
+
+/* =========================================================
+   Dark select (FINAL) - keep only this block (fix white dropdown)
+   ========================================================= */
+select{
+  background:rgba(10, 18, 35, 0.85);
+  color:#eaf0ff;
+  border:1px solid rgba(255,255,255,0.18);
+  border-radius:10px;
+}
+
+select:focus{
+  outline:none;
+  border-color:rgba(120, 170, 255, 0.55);
+  box-shadow:0 0 0 3px rgba(120, 170, 255, 0.15);
+}
+
+select option{
+  background:#0b1430;
+  color:#eaf0ff;
+}
+
+/* =========================================================
+   UI Icons (static/picture/*.png)
+   ========================================================= */
+
+.ui-icon{
+  width:16px;
+  height:16px;
+  object-fit:contain;
+  opacity:.9;
+  flex:0 0 auto;
+  vertical-align:middle;
+}
+
+.nav-icon{
+  width:18px;
+  height:18px;
+  opacity:.92;
+}
+
+.mg-btn .ui-icon,
+.btn .ui-icon{
+  width:14px;
+  height:14px;
+  opacity:.9;
+}
+
+/* ===== ギャラリー角アイコン ===== */
+.mg-card {
+  position: relative;
+}
+
+.mg-corner {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* 画像スクロールを邪魔しない */
+  z-index: 3;
+}
+
+.mg-corner form {
+  pointer-events: auto; /* ボタンだけ操作可 */
+}
+
+.corner-left {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+
+.corner-right {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.corner-btn {
+  background: rgba(0,0,0,0.55);
+  border: none;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.corner-btn img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.corner-btn:hover {
+  background: rgba(0,0,0,0.8);
+}
+
+.corner-btn.danger:hover {
+  background: rgba(160,0,0,0.85);
+}
+
+.corner-btn {
+  background: linear-gradient(
+    180deg,
+    rgba(0,0,0,0.85),
+    rgba(0,0,0,0.65)
+  );
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 6px;
+}
+
+/* ホバー時：より「操作できる」感 */
+.corner-btn:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(0,0,0,0.95),
+    rgba(0,0,0,0.75)
+  );
+}
+
+/* 非公開（鍵）は少し重く */
+.corner-btn img[src*="lock"] {
+  opacity: 0.95;
+}
+/* 下に細長いコピー */
+.copy-wide{
+  width:100%;
+  margin-top:12px;
+  padding:10px 14px;
+  border-radius:999px;
+  background:linear-gradient(
+    135deg,
+    rgba(80,120,200,.45),
+    rgba(60,90,160,.35)
+  );
+  border:1px solid rgba(140,180,255,.45);
+  color:#eaf0ff;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+
+.copy-wide:hover{
+  filter:brightness(1.1);
+}
+
+/* ===== タイトル横コピー ===== */
+.mg-title-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.copy-inline{
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.copy-inline:hover{
+  background: rgba(255,255,255,0.14);
+}
+/* ===== ピン：背景を消して分かりやすく ===== */
+.btn-ghost{
+  background: transparent !important;
+  border-color: rgba(255,255,255,0.18) !important;
+  box-shadow: none !important;
+}
+
+.btn-ghost:hover{
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(140,190,255,0.55) !important;
+}
+
+/* ===== Saves：横に配列（レスポンシブ） ===== */
+.saves-list{
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+/* 以前の「カードを中央寄せ＆max-width」設定が残ってたら無効化 */
+.saves-list .mg-card{
+  max-width: none;
+  margin: 0;
+}
+/* ===== Saves：ボタンが二段にならないように固定 ===== */
+
+/* 下段（ボタン列）を必ず横並びにする */
+.saves-list .save-controls{
+  display: flex;
+  flex-direction: row !important; /* ← ここで強制 */
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* ピン＋編集＋コピーも横一列に固定 */
+.saves-list .save-actions{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;   /* ← wrapさせない */
+}
+
+/* カードが狭い時でも落ちないようにボタンを少し小さく */
+.saves-list .btn.btn-mini{
+  width: 70px;
+  height: 36px;
+  border-radius: 100px;
+}
+
+/* もし以前の「モバイルで縦並び」ルールが効いてたら無効化 */
+@media (max-width: 560px){
+  .saves-list .save-controls{
+    flex-direction: row !important;
+    align-items: center;
+  }
+  .saves-list .save-actions{
+    width: auto;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+}
+/* ===== Saves：サイズ・日時を下に下げて読みやすく ===== */
+
+/* ファイル名 */
+.saves-list .mg-id{
+  margin-bottom: 6px; /* 下に余白を作る */
+}
+
+/* サイズ・日時 */
+.saves-list .mg-name{
+  margin-top: -4px;    /* ← ここで下げる */
+  font-size: 0.85rem;
+  color: rgba(220,230,255,0.72);
+
+  /* 見た目を少し“浮かせる” */
+  position: relative;
+  top: 2px;
+}
+
+/* ===== ピンマークをもっと左に寄せる ===== */
+.saves-list .pin-form{
+  margin-left: -8px;   /* ← ここが効く */
+}
+/* サイズ・日時をさらに補足情報寄りに */
+.saves-list .mg-name{
+  background: rgba(120,180,255,.07);
+  border-color: rgba(120,180,255,.12);
+  font-size: 0.82rem;
+  opacity: 0.9;
+}
+/* 操作エリアを一段奥へ */
+.saves-list .save-controls{
+  opacity: 0.85;
+}
+
+/* hover したカードだけ少し浮かせる */
+.saves-list .mg-card:hover .save-controls{
+  opacity: 1;
 }

@@ -132,3 +132,20 @@ window.addEventListener('pageshow', (e) => {
     }
   });
 })();
+
+/* ===== ギャラリー：公開範囲トグル ===== */
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.js-vis-toggle button');
+  if (!btn) return;
+
+  const form = btn.closest('.js-vis-toggle');
+  const input = form.querySelector('input[name="visibility"]');
+
+  const order = ['private', 'unlisted', 'public'];
+  const cur = form.dataset.current || input.value || 'private';
+  const next = order[(order.indexOf(cur) + 1) % order.length];
+
+  input.value = next;
+  form.submit();
+});
+

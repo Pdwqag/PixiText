@@ -58,71 +58,55 @@ def _resolve_uploaded_src(token: str) -> tuple[str, str]:
 
 
 def _render_pixiv_embed(pid: str, page: Optional[int] = None) -> str:
-    """Return the markup used for `[pixivimage:*]` tokens.
-
-    The wrapper `<div class="pixiv-embed-container">` and the overlay link are
-    required so the illustration fills the iframe while still letting users
-    click the embed to open the original Pixiv page.  These hooks are styled in
-    `static/style.css` and copied into `export.html`; dropping them during
-    conflict resolution will break the preview/export behaviour.
-
-    When a page number greater than 1 is supplied (e.g. `[pixivimage:12345@2]`)
-    we cannot use Pixiv's iframe – it always renders the first page.  In that
-    case the markup switches to an `<img>` that points at our proxy endpoint,
-    which injects the required headers when downloading the original file.
-    """
-
+    # pixiv 埋め込みは使わず、常に置換画像を表示する
     page = (page or 1)
     if page < 1:
         page = 1
 
+    # クリック先（pixivの該当ページ）
     base_link = f"https://www.pixiv.net/artworks/{pid}"
-    figure_attrs = ["class=\"pixiv-illustration\"", f'data-pixiv-id="{pid}"']
     if page > 1:
-        figure_attrs.append(f'data-pixiv-page="{page}"')
-    figure_attr_str = " ".join(figure_attrs)
-
-    if page > 1:
-        # Pixiv's official iframe cannot render arbitrary pages, so we fall
-        # back to a locally proxied <img>.  Pixiv expects zero-based page
-        # indices in the query parameter.
-        proxy_page = page - 1
-        overlay_href = f"{base_link}?page={proxy_page}"
-        alt = f"pixiv作品 {pid} {page}枚目"
+        overlay_href = f"{base_link}?page={page-1}"
         caption = f"pixiv作品 {pid} を開く（{page}枚目）"
-        return (
-            f'<figure {figure_attr_str}>'
-            '<div class="pixiv-embed-container pixiv-embed-container--image">'
-            f'<img class="pixiv-embed" src="/pixiv/artworks/{pid}/{proxy_page}"'
-            f' alt="{alt}" loading="lazy" decoding="async">'
-            f'<a class="pixiv-embed-overlay" href="{overlay_href}" target="_blank"'
-            f' rel="noopener noreferrer" aria-label="{caption}"></a>'
-            '</div>'
-            f'<figcaption><a href="{overlay_href}" target="_blank" rel="noopener noreferrer">{caption}</a></figcaption>'
-            '</figure>'
-        )
+        alt = f"pixiv作品 {pid} {page}枚目（置換画像）"
+    else:
+        overlay_href = base_link
+        caption = f"pixiv作品 {pid} を開く"
+        alt = f"pixiv作品 {pid}（置換画像）"
 
-    caption = f"pixiv作品 {pid} を開く"
+    # 置換画像（staticに置いたもの）
+    placeholder_src = "/static/replacement.png"
+
     return (
-        f'<figure {figure_attr_str}>'
-        '<div class="pixiv-embed-container">'
-        f'<iframe class="pixiv-embed" src="https://embed.pixiv.net/embed.php?illust_id={pid}&lang=ja"'
-        f' loading="lazy" allowfullscreen frameborder="0" scrolling="no" title="pixiv作品 {pid}"></iframe>'
-        f'<a class="pixiv-embed-overlay" href="{base_link}" target="_blank" rel="noopener noreferrer"'
-        f' aria-label="{caption}"></a>'
+        f'<figure class="pixiv-illustration" data-pixiv-id="{pid}"'
+        + (f' data-pixiv-page="{page}"' if page > 1 else "")
+        + ">"
+        '<div class="pixiv-embed-container pixiv-embed-container--image">'
+        f'<img class="pixiv-embed" src="{placeholder_src}" alt="{alt}" loading="lazy" decoding="async">'
+        f'<a class="pixiv-embed-overlay" href="{overlay_href}" target="_blank"'
+        f' rel="noopener noreferrer" aria-label="{caption}"></a>'
         '</div>'
-        f'<figcaption><a href="{base_link}" target="_blank" rel="noopener noreferrer">{caption}</a></figcaption>'
+        f'<figcaption><a href="{overlay_href}" target="_blank" rel="noopener noreferrer">{caption}</a></figcaption>'
         '</figure>'
     )
 
+
 # ---------- インライン ----------
 def render_inline(text: str) -> str:
-    def rb_sub(m): return f'<ruby>{m.group(1)}<rt>{m.group(2)}</rt></ruby>'
+    def rb_sub(m):
+        return f'<ruby>{m.group(1)}<rt>{m.group(2)}</rt></ruby>'
     text = RE_RUBY.sub(rb_sub, text)
 
-    def jumpuri_sub(m): return f'<a href="{m.group(2)}" target="_blank" rel="noopener noreferrer">{m.group(1)}</a>'
+    def jumpuri_sub(m):
+        return f'<a href="{m.group(2)}" target="_blank" rel="noopener noreferrer">{m.group(1)}</a>'
     text = RE_JUMPURI.sub(jumpuri_sub, text)
-    text = RE_JUMP_INL.sub(lambda m: f'<a class="jump" href="#{m.group(1)}">{m.group(1)}ページへ</a>', text)
+
+    # ★ここが抜けてた： [jump:12] をリンク化
+    text = RE_JUMP_INL.sub(
+        lambda m: f'<a class="jump" href="#{m.group(1)}" data-jump="{m.group(1)}">{m.group(1)}ページへ</a>',
+        text
+    )
+
     return text
 
 def render_block(block: str, page_index: int) -> str:
@@ -139,6 +123,10 @@ def render_block(block: str, page_index: int) -> str:
             out_parts.append(f'<h2 class="chapter">{escape(raw_title)}</h2>')
             # 章タグの「後ろに続く本文」を残りとして再処理する
             s = s[end+1:]            # ']' の後ろから最後まで
+            # 章の直後（本文の前）の先頭空行は捨てる
+            s = s.lstrip("\n")
+            # 連続する空行も詰める（最大1個だけ残す等）
+            s = re.sub(r'\n{3,}', '\n\n', s)
             s = s.lstrip("\n ")      # 先頭の改行や空白は削っておく
             if not s.strip():
                 # 本文が何も無いなら 1 行分の空白を入れて終了
@@ -201,7 +189,7 @@ def render_block(block: str, page_index: int) -> str:
     m = RE_JUMP_BLK.match(s)
     if m:
         target = int(m.group(1))
-        return f'<a class="jump" href="#{target}">{target}ページへ</a>'
+        return f'<a class="jump" href="#{target}" data-jump="{target}">{target}ページへ</a>'
 
     esc = escape(s).replace('\n', '<br>')
     return f'<p>{render_inline(esc)}</p>'

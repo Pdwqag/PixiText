@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>ログイン</h2>
+
+  <form method="post">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>ユーザー名<br><input name="username" autocomplete="username"></label><br><br>
+    <label>パスワード<br><input name="password" type="password" autocomplete="current-password"></label><br><br>
+    <button type="submit" class="btn primary">ログイン</button>
+  </form>
+
+  <p style="margin-top:1rem;">
+    アカウントがない場合は <a href="{{ url_for('signup') }}">新規登録</a>
+  </p>
+</section>
+{% endblock %}

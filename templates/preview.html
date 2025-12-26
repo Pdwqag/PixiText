@@ -1,35 +1,57 @@
-
 {% extends "base.html" %}
 {% block content %}
-<section class="panel panel--preview-page">
+<section class="panel panel--preview-page {{ 'wm-vertical' if writing_mode == 'vertical' else 'wm-horizontal' }}">
   <header class="panel-heading">
     <div class="panel-heading__text">
       <span class="panel-kicker">Live Preview</span>
       <h2 class="panel-title">プレビュー</h2>
-      <p class="panel-description">ページごとに分割された本文をテキストとして確認し、必要に応じてコピーできます。</p>
-    </div>
-    <div class="panel-actions">
-      <a class="link-button" href="{{ url_for('read_single', p=1) }}">ページ送りで読む</a>
+      <p class="panel-description">できる限りpixivのものに揃えています</p>
     </div>
   </header>
-  {% for page in pages %}
+
   <div class="rendered">
-    <label for="page-text-{{ loop.index }}" class="page-text__label">{{ loop.index }}ページ目の本文</label>
-    <textarea id="page-text-{{ loop.index }}" class="page-text__area" readonly>{{ page.text }}</textarea>
+    <div class="page-html">
+      {{ page.html
+          | replace('[chapter:' ~ page.chapter ~ ']', '')
+          | safe
+      }}
+    </div>
   </div>
-  {% endfor %}
+
+
   <div class="bottom-pager">
     <div class="pager-center">
       <a class="page-arrow prev" href="{{ url_for('preview', p=prev_p) }}">&lsaquo;</a>
 
       {% for i in nums %}
-       <a class="page-number {% if i == p %}active{% endif %}"
-          href="{{ url_for('preview', p=i) }}">{{ i }}</a>
+        <a class="page-number {% if i == p %}active{% endif %}"
+           href="{{ url_for('preview', p=i) }}">{{ i }}</a>
       {% endfor %}
 
       <a class="page-arrow next" href="{{ url_for('preview', p=next_p) }}">&rsaquo;</a>
-
     </div>
   </div>
+
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const isVertical = document.querySelector(".wm-vertical") !== null;
+    const box = document.querySelector(".page-html");
+    if (!box) return;
+
+    if (isVertical) {
+      box.addEventListener("wheel", (e) => {
+        if (e.shiftKey) return; // Shift+ホイールは通常の横スクロールとして尊重
+        const dx = e.deltaX;
+        const dy = e.deltaY;
+        if (Math.abs(dy) > Math.abs(dx)) {
+          box.scrollLeft += dy;
+          e.preventDefault();
+        }
+      }, { passive: false });
+    }
+  });
+  </script>
+
+  
 </section>
 {% endblock %}

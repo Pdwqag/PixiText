@@ -21,6 +21,22 @@
   </script>
 </head>
 
+<script>
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('a.jump[data-jump]');
+  if (!a) return;
+
+  e.preventDefault();
+  const target = parseInt(a.dataset.jump, 10);
+  if (!Number.isFinite(target) || target < 1) return;
+
+  const url = new URL(window.location.href);
+  url.searchParams.set("p", String(target));
+  window.location.href = url.toString();
+});
+</script>
+
+
 <body class="theme-night">
   <div class="site-background" aria-hidden="true"></div>
 
@@ -35,15 +51,25 @@
       </a>
 
       <nav class="site-nav" aria-label="主要ナビゲーション">
-        <a href="{{ url_for('index') }}" class="nav-link{% if request.endpoint in ['index', 'preview'] %} active{% endif %}">エディタ</a>
-        <a href="{{ url_for('gallery') }}" class="nav-link{% if request.endpoint == 'gallery' %} active{% endif %}">ギャラリー</a>
-        <a href="{{ url_for('saves_list') }}" class="nav-link{% if request.endpoint in ['saves_list', 'saves_open'] %} active{% endif %}">テキスト保存</a>
+        <a href="{{ url_for('index') }}" class="nav-link{% if request.endpoint in ['index', 'preview'] %} active{% endif %}">
+          <img class="ui-icon nav-icon" src="{{ url_for('static', filename='picture/pen.png') }}" alt="" aria-hidden="true">
+        </a>
+        <a href="{{ url_for('gallery') }}" class="nav-link{% if request.endpoint == 'gallery' %} active{% endif %}">
+          <img class="ui-icon nav-icon" src="{{ url_for('static', filename='picture/upload.png') }}" alt="" aria-hidden="true">
+        </a>
+        <a href="{{ url_for('saves_list') }}" class="nav-link{% if request.endpoint in ['saves_list', 'saves_open'] %} active{% endif %}">
+          <img class="ui-icon nav-icon" src="{{ url_for('static', filename='picture/copy.png') }}" alt="" aria-hidden="true">
+        </a>
+        </a>
+          {% if session.get("user_id") %}
+          <a href="{{ url_for('logout') }}" class="nav-link">ログアウト</a>
+          {% endif %}
+        </a>
       </nav>
 
       {% if request.endpoint == 'preview' %}
         <a href="{{ url_for('index') }}" class="back-button nav-cta" aria-label="エディタに戻る">
-          <span class="icon">←</span>
-          <span>エディタに戻る</span>
+          <span>メニューに戻る</span>
         </a>
       {% endif %}
     </div>

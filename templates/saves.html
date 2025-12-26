@@ -5,53 +5,76 @@
     <div class="panel-heading__text">
       <span class="panel-kicker">Draft Archive</span>
       <h2 class="panel-title">保存済みテキスト一覧</h2>
-      <p class="panel-description">ローカルディスクに保存されたテキストファイルの一覧です。必要なデータを編集・削除し、執筆フローを整えましょう。</p>
-    </div>
-    <div class="panel-actions">
-      <a class="link-button subtle" href="{{ url_for('index') }}">← エディタに戻る</a>
+      <p class="panel-description">保存しているテキスト一覧です</p>
     </div>
   </header>
 
-  {% if cloud_targets %}
-    <div class="cloud-callout-stack">
-      {% for provider in cloud_targets %}
-        {% if provider.saves_url %}
-          <div class="cloud-callout" role="note">
-            <span class="cloud-callout__badge">{{ provider.label }}</span>
-            <p class="cloud-callout__text">クラウド上の <code>saves/</code> バックアップを開きます。<a href="{{ provider.saves_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
-          </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  {% endif %}
 
   {% if files %}
-    <div class="mg-grid mg-grid-wide">
+    <div class="saves-list">
       {% for f in files %}
         <div class="mg-card">
+
+          <!-- ★ 角アイコン（ギャラリーと同じ配置） -->
+          <div class="mg-corner">
+            <!-- 左上：公開範囲トグル -->
+            {% set vis = f.visibility or 'private' %}
+            <form method="post"
+                  action="{{ url_for('saves_set_visibility') }}"
+                  class="corner-left js-vis-toggle"
+                  data-current="{{ vis }}">
+              <input type="hidden" name="fname" value="{{ f.name }}">
+              <input type="hidden" name="visibility" value="{{ vis }}">
+              <button type="button" class="corner-btn" title="公開範囲を切り替え">
+                {% if vis == 'public' %}
+                  <img src="{{ url_for('static', filename='picture/earth.png') }}">
+                {% elif vis == 'unlisted' %}
+                  <img src="{{ url_for('static', filename='picture/chain.png') }}">
+                {% else %}
+                  <img src="{{ url_for('static', filename='picture/lock.png') }}">
+                {% endif %}
+              </button>
+            </form>
+
+            <!-- 右上：削除 -->
+            <form method="post"
+                  action="{{ url_for('saves_delete') }}"
+                  class="corner-right js-delete"
+                  data-what="テキスト" data-id="{{ f.name }}">
+              <input type="hidden" name="fname" value="{{ f.name }}">
+              <button class="corner-btn danger" type="submit" title="削除">
+                <img src="{{ url_for('static', filename='picture/cross.png') }}" alt="">
+              </button>
+            </form>
+          </div>
+
           <div class="mg-body">
             <!-- ファイル名 -->
             <div class="mg-id" title="{{ f.name }}">{{ f.name }}</div>
             <!-- メタ情報 -->
             <div class="mg-name">{{ f.size_kb }} KB ・ {{ f.mtime_str }}</div>
 
-            <div class="mg-actions">
-              <!-- 編集（＝開く → セッションへ読込 → indexへ） -->
-              <form method="get" action="{{ url_for('saves_open') }}">
+            <div class="save-controls">
+              <!-- 上に固定 / 固定解除 -->
+              <form method="post" action="{{ url_for('saves_toggle_pin') }}" class="pin-form">
                 <input type="hidden" name="fname" value="{{ f.name }}">
-                <button class="mg-btn" type="submit">編集</button>
+                <button class="btn btn-mini" type="submit" title="{% if f.pinned %}固定解除{% else %}上に固定{% endif %}">
+                  <img class="ui-icon" src="{{ url_for('static', filename='picture/' ~ ('brack_pin.png' if f.pinned else 'white_pin.png')) }}" alt="">
+                </button>
               </form>
+              <!-- 右側アクション -->
+              <div class="save-actions">
+                <form method="get" action="{{ url_for('saves_open') }}">
+                  <input type="hidden" name="fname" value="{{ f.name }}">
+                  <button class="btn btn-mini" type="submit" title="編集">
+                    <img class="ui-icon" src="{{ url_for('static', filename='picture/edit.png') }}" alt="">
+                  </button>
+                </form>
 
-              <!-- 削除（モーダル確認） -->
-              <form method="post"
-                    action="{{ url_for('saves_delete') }}"
-                    class="js-delete" data-what="テキスト" data-id="{{ f.name }}">
-                <input type="hidden" name="fname" value="{{ f.name }}">
-                <button class="mg-btn delete" type="submit">削除</button>
-              </form>
-
-              <!-- コピー（ファイル名をコピーしたい場合のおまけ。要らなければ削除OK） -->
-              <button class="mg-btn copy" type="button" data-copy="{{ f.name }}">コピー</button>
+                <button class="btn btn-mini" type="button" data-copy="{{ f.name }}" title="コピー">
+                  <img class="ui-icon" src="{{ url_for('static', filename='picture/copy.png') }}" alt="">
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -61,7 +84,7 @@
     <p class="empty-hint">まだ保存されたテキストがありません。エディタで「保存」してください。</p>
   {% endif %}
 
-  <div class="panel-divider"></div>
+  <!-- <div class="panel-divider"></div>
   {% if cloud_manifest.gcs.enabled %}
     <section class="cloud-note cloud-note--accent" aria-label="Google Cloud Storage 情報">
       <p><strong>Google Cloud Storage を確認する</strong></p>
@@ -87,6 +110,6 @@
     </section>
   {% else %}
     <p class="cloud-note">Google Cloud Storage を有効化すると、ここにテキストバックアップへのショートカットが表示されます。</p>
-  {% endif %}
+  {% endif %} -->
 </section>
 {% endblock %}

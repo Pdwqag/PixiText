@@ -5,7 +5,20 @@ import re
 import time
 import mimetypes
 import threading
+import re
 from datetime import datetime, timezone
+from werkzeug.security import check_password_hash
+from dotenv import load_dotenv
+load_dotenv()
+import secrets
+from pathlib import Path
+from flask import Response
+from users import create_user, verify_login
+from werkzeug.utils import secure_filename
+
+
+
+
 
 from flask import (
     Flask,
@@ -22,7 +35,7 @@ from flask import (
     url_for,
 )
 from flask_session import Session
-from werkzeug.utils import secure_filename
+from functools import wraps
 
 from parser import parse_document
 
@@ -32,12 +45,14 @@ NotFound = None
 # 旧実装では importlib で google.cloud.storage を動的ロードしていました。
 
 BASE_DIR = os.path.dirname(__file__)
+
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 SAVES_DIR = os.path.join(BASE_DIR, "saves")
 SESSION_DIR = os.path.join(BASE_DIR, "flask_session")
 DB_PATH = os.path.join(UPLOAD_DIR, "uploads.json")
+SAVES_META_PATH = os.path.join(SAVES_DIR, "saves_meta.json")
 
 # 必要なディレクトリは必ず作成
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -60,8 +75,7 @@ app.config.update(
     UPLOAD_FOLDER=UPLOAD_DIR,
     SESSION_TYPE="filesystem",
     SESSION_FILE_DIR=SESSION_DIR,
-    SESSION_PERMANENT=False,
-    BUILD_VER=25,  # キャッシュバスター
+    BUILD_VER=10.3,  # キャッシュバスター
     # Google Cloud Storage 連携は停止中。必要になったら環境変数を再度読み込む。
     GCS_PROJECT_ID="",
     GCS_BUCKET_NAME="",
@@ -71,6 +85,13 @@ app.config.update(
     GCS_SERVICE_ACCOUNT_JSON="",
     GCS_SERVICE_ACCOUNT_EMAIL="",
     GCS_BROWSER_BASE_URL="",
+    SESSION_PERMANENT = False,
+    PERMANENT_SESSION_LIFETIME = 0,
+    SESSION_USE_SIGNER = True,
+    SESSION_COOKIE_SAMESITE = "Lax",
+    SESSION_COOKIE_HTTPONLY = True,
+    SESSION_COOKIE_SECURE = bool(os.getenv("RENDER")) or bool(os.getenv("CLOUDFLARE")),
+    AUTH_LOG_PATH=os.path.join(BASE_DIR, "auth_log.jsonl"),
 )
 
 # 3) Flask-Session を初期化（requirements.txt に Flask-Session を入れること）
@@ -116,6 +137,26 @@ def load_cloud_manifest(*, force_refresh=False):
         "gcs": {"enabled": False},
     }
 
+@app.before_request
+def require_login():
+    if request.endpoint is None:
+        return
+
+    if request.endpoint in (
+        "login",
+        "signup",
+        "static",
+        "uploaded",
+        "image_by_id",
+        "gallery_public",
+    ):
+        return
+
+    if not session.get("user_id"):
+        return redirect(url_for("login", next=request.full_path))
+
+
+
 
 @app.after_request
 def _no_cache_static_css(resp):
@@ -124,9 +165,28 @@ def _no_cache_static_css(resp):
     return resp
 
 
+
 def allowed_file(fn): return "." in fn and fn.rsplit(".",1)[1].lower() in ALLOWED_EXTENSIONS
 
 # === テンプレート共通変数 ===
+def _client_ip():
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.remote_addr or ""
+
+def _write_auth_log(event: dict):
+    path = app.config.get("AUTH_LOG_PATH")
+    if not path:
+        return
+    event = {
+        **event,
+        "ts": int(time.time()),
+        "iso": datetime.now(timezone.utc).isoformat(),
+    }
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
+
 @app.context_processor
 def inject_cloud_links():
     manifest = load_cloud_manifest()
@@ -151,36 +211,167 @@ def _gen_id(db):
         nid = f"{random.randint(100000,999999)}"
         if nid not in db: return nid
 
+def _load_saves_meta():
+    if not os.path.exists(SAVES_META_PATH):
+        return {}
+    try:
+        with open(SAVES_META_PATH, "r", encoding="utf-8") as f:
+            raw = f.read().strip()
+            if not raw:
+                return {}
+            return json.loads(raw)
+    except Exception:
+        return {}
+
+def _save_saves_meta(db):
+    tmp = SAVES_META_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(db, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, SAVES_META_PATH)
+
+
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+
+        try:
+            uid = create_user(username, password)
+        except ValueError as e:
+            msg = "登録に失敗しました"
+            if str(e) == "username exists":
+                msg = "そのユーザー名は使われています"
+            elif str(e) == "username empty":
+                msg = "ユーザー名が空です"
+            elif str(e) == "password empty":
+                msg = "パスワードが空です"
+            flash(msg)
+            return redirect(url_for("signup"))
+
+        session.clear()
+        session["user_id"] = uid
+        return redirect(url_for("index"))
+
+    return render_template("signup.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        next_url = request.form.get("next") or url_for("index")
+
+        uid = verify_login(username, password)
+        if not uid:
+            flash("ユーザー名またはパスワードが違います")
+            return redirect(url_for("login", next=next_url))
+
+        session.clear()
+        session["user_id"] = uid
+        return redirect(next_url)
+
+    return render_template("login.html", next=request.args.get("next", url_for("index")))
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/_whoami")
+def _whoami():
+    return {"user_id": session.get("user_id"), "endpoint": request.endpoint}
+
+
 @app.route("/uploads/<path:filename>")
 def uploaded(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
-
-# IDで解決する画像URL: /image/123456
-@app.route("/image/<img_id>")
-def image_by_id(img_id):
-    db = _load_db()
-    rec = db.get(img_id)
-    if not rec: abort(404)
-    path = os.path.join(app.config["UPLOAD_FOLDER"], rec["stored_name"])
-    if not os.path.exists(path):
-        abort(404)
-    download_name = rec.get("original_name") or rec.get("stored_name")
-    resp = send_file(path, as_attachment=False, download_name=download_name)
-    resp.headers.setdefault("Cache-Control", "public, max-age=86400")
-    return resp
 
 
 # ギャラリー（一覧）
 @app.route("/gallery")
 def gallery():
     db = _load_db()
-    # 新しい順に並べ替え（簡易）
-    items = [{"id": k, **v} for k,v in db.items()]
+    uid = session.get("user_id")
+
+    items = []
+    for k, v in db.items():
+        v = dict(v)
+        v.setdefault("visibility", "private")
+        # 古いデータは owner がないので、とりあえず自分のギャラリーに出さない（安全）
+        # → 取り込みたいなら「移行」で owner を付ける
+        if v.get("owner") != uid:
+            continue
+        items.append({"id": k, **v})
+
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    return render_template(
-        "gallery.html",
-        items=items,
-    )
+    return render_template("gallery.html", items=items)
+
+@app.route("/gallery/public")
+def gallery_public():
+    db = _load_db()
+    items = []
+    for k, v in db.items():
+        v = dict(v)
+        v.setdefault("visibility", "private")
+        if v.get("visibility") != "public":
+            continue
+        items.append({"id": k, **v})
+    items.sort(key=lambda x: x.get("ts", 0), reverse=True)
+    return render_template("gallery.html", items=items)
+
+# IDで解決する画像URL: /image/123456
+@app.route("/image/<img_id>")
+def image_by_id(img_id):
+    db = _load_db()
+    rec = db.get(img_id)
+    if not rec:
+        abort(404)
+
+    # --- 互換（古いデータ救済） ---
+    rec.setdefault("visibility", "private")
+
+    # private は owner一致のみ
+    if rec.get("visibility") == "private":
+        if rec.get("owner") != session.get("user_id"):
+            abort(403)
+
+    path = os.path.join(app.config["UPLOAD_FOLDER"], rec["stored_name"])
+    if not os.path.exists(path):
+        abort(404)
+
+    download_name = rec.get("original_name") or rec.get("stored_name")
+    resp = send_file(path, as_attachment=False, download_name=download_name)
+    resp.headers.setdefault("Cache-Control", "public, max-age=86400")
+    return resp
+
+
+@app.route("/image/<img_id>/visibility", methods=["POST"])
+def set_visibility(img_id):
+    db = _load_db()
+    rec = db.get(img_id)
+    if not rec:
+        abort(404)
+
+    uid = session.get("user_id")
+    rec.setdefault("visibility", "private")
+
+    if rec.get("owner") != uid:
+        abort(403)
+
+    vis = (request.form.get("visibility") or "private").strip()
+    if vis not in ("private", "unlisted", "public"):
+        abort(400)
+
+    rec["visibility"] = vis
+    db[img_id] = rec
+    _save_db(db)
+
+    flash(f"公開設定を {vis} にしました")
+    return redirect(url_for("gallery"))
 
 @app.route("/", methods=["GET","POST"])
 def index():
@@ -198,8 +389,10 @@ def index():
 
     # ★ ギャラリー用の一覧（新しい順）
     db = _load_db()
-    gallery_items = [{"id": k, **v} for k, v in db.items()]
+    uid = session.get("user_id")
+    gallery_items = [{"id": k, **v} for k, v in db.items() if v.get("owner") == uid]
     gallery_items.sort(key=lambda x: x.get("ts", 0), reverse=True)
+
 
     refresh = request.args.get("cloud_refresh") == "1"
     cloud_manifest = load_cloud_manifest(force_refresh=refresh)
@@ -267,10 +460,12 @@ def upload():
 
     # DB登録
     db[nid] = {
-    "stored_name": stored_name,
-    "original_name": orig_name,                # 表示用（日本語そのまま）
-    "original_name_safe": secure_filename(orig_name),  # 参考/予備
-    "ts": int(time.time())
+        "stored_name": stored_name,
+        "original_name": orig_name,
+        "original_name_safe": secure_filename(orig_name),
+        "ts": int(time.time()),
+        "owner": session.get("user_id"),
+        "visibility": "private",
     }
     _save_db(db)
 
@@ -311,6 +506,24 @@ def preview():
         p = max(1, min(len(pages), p))
         page = pages[p - 1]
         total = len(pages)
+    
+    
+    raw_text = page.get("text", "")
+
+    m = re.match(r"^\s*\[chapter:(.+?)\]\s*(?:\r?\n)*", raw_text)
+    if m:
+        chapter_title = m.group(1)
+        body_text = raw_text[m.end():]
+    else:
+        chapter_title = None
+        body_text = raw_text
+
+    page = {
+        **page,
+        "chapter": chapter_title,
+        "text": body_text,
+    }
+
 
     nums = list(range(1, total + 1)) if total > 0 else []
 
@@ -330,9 +543,6 @@ def preview():
         writing_mode=writing_mode,
         text=text,
     )
-
-
-
 
 @app.route("/api/preview_page", methods=["GET", "POST"])
 def api_preview_page():
@@ -366,75 +576,46 @@ def api_preview_page():
     p = max(1, min(total, p))
     page = pages[p - 1]
 
+    raw_text = page.get("text", "")
+    m = re.match(r"\[chapter:(.+?)\]\s*\n*", raw_text)
+    if m:
+        chapter_title = m.group(1)
+        body_text = raw_text[m.end():]
+    else:
+        chapter_title = None
+        body_text = raw_text
+
+    page = {
+        **page,
+        "chapter": chapter_title,
+        "text": body_text,
+    }
+
+    html0 = page.get("html", "")
+    html0 = re.sub(
+        r'^\s*<[^>]*class="chapter"[^>]*>.*?</[^>]+>\s*',
+        "",
+        html0,
+        flags=re.S
+    )
+    html0 = re.sub(
+        r'^\s*\[chapter:(.+?)\]\s*(?:<br\s*/?>\s*)*',
+        "",
+        html0,
+        flags=re.S | re.I
+    )
+    page["html"] = html0
+
     return jsonify(
         success=True,
         p=p,
         total=total,
-        page_html=page.get("html", ""),
-        page_text=page.get("text", ""),
+        page_html=page["html"],
+        page_text=page["text"],
         writing_mode=writing_mode,
     )
 
 
-@app.route("/api/preview_page")
-def api_preview_page_v2():
-    text = session.get("last_text", "")
-    writing_mode = session.get("last_writing_mode", "horizontal")
-
-    if not text:
-        return jsonify(success=False, message="プレビューする文章がありません。"), 400
-
-    try:
-        p = int(request.args.get("p", 1))
-    except Exception:
-        p = 1
-
-    try:
-        pages = parse_document(text)
-    except Exception as e:
-        return jsonify(success=False, message=f"プレビュー生成に失敗しました: {e}"), 400
-
-    total = len(pages) or 1
-    p = max(1, min(total, p))
-    page = pages[p - 1]
-
-    return jsonify(
-        success=True,
-        p=p,
-        total=total,
-        page_html=page.get("html", ""),
-        writing_mode=writing_mode,
-    )
-
-
-# 明示的にエンドポイント名を指定し、重複登録を避ける
-PREVIEW_ENDPOINT = "api_preview_page_v2"
-
-
-def _ensure_preview_route_registered():
-    """プレビューAPIの重複登録を防ぎ、必要なら再登録する。"""
-
-    # 既存の同名エンドポイントがある場合は削除してから登録し直す
-    if PREVIEW_ENDPOINT in app.view_functions:
-        del app.view_functions[PREVIEW_ENDPOINT]
-
-    # URLマップから同じエンドポイントのルールを除去
-    rules_to_remove = [r for r in app.url_map.iter_rules() if r.endpoint == PREVIEW_ENDPOINT]
-    for rule in rules_to_remove:
-        app.url_map._rules.remove(rule)
-        app.url_map._rules_by_endpoint[PREVIEW_ENDPOINT].remove(rule)
-        if not app.url_map._rules_by_endpoint[PREVIEW_ENDPOINT]:
-            del app.url_map._rules_by_endpoint[PREVIEW_ENDPOINT]
-
-    app.add_url_rule(
-        "/api/preview_page",
-        endpoint=PREVIEW_ENDPOINT,
-        view_func=api_preview_page_v2,
-        methods=["GET", "POST"],
-    )
-
-
-_ensure_preview_route_registered()
 
 @app.route("/export", methods=["POST"])
 def export():
@@ -484,14 +665,16 @@ def read_single():
 
 @app.route("/delete_image/<img_id>", methods=["POST"])
 def delete_image(img_id):
-    """ID で指定された画像を削除（DBと実ファイルの両方）"""
     db = _load_db()
     rec = db.get(img_id)
     if not rec:
         flash(f"ID {img_id} の画像が見つかりませんでした。")
-        # どこから来たかに応じて戻る
         dest = request.args.get("next", "index")
         return redirect(url_for(dest) if dest in ("index", "gallery") else url_for("index"))
+
+    uid = session.get("user_id")
+    if rec.get("owner") != uid:
+        abort(403)
 
     # ファイル削除（存在しなくてもスルー）
     try:
@@ -508,13 +691,13 @@ def delete_image(img_id):
     if gcs_result is False:
         flash("クラウドバックアップ（Google Cloud Storage）の削除に失敗しました。")
 
-    # DB から削除して保存
     db.pop(img_id, None)
     _save_db(db)
 
     flash(f"ID {img_id} を削除しました。")
     dest = request.args.get("next", "index")
     return redirect(url_for(dest) if dest in ("index", "gallery") else url_for("index"))
+
 
 # 末尾の他ルートと同じ場所に追記
 # === 保存をエディタへ読み込む =========================
@@ -533,7 +716,6 @@ def saves_open():
     session["last_filename"] = fname
     flash(f"読み込みました: {fname}")
     return redirect(url_for("index"))
-
 
 
 # === 保存ファイルを削除 ===============================
@@ -589,6 +771,15 @@ def save_local():
             f.write(text)
         session["last_text"] = text
         session["last_filename"] = name
+        meta = _load_saves_meta()
+        rec = meta.get(name, {})
+        rec.setdefault("owner", session.get("user_id"))
+        rec.setdefault("visibility", "private")
+        rec.setdefault("pinned", False)
+        rec["updated_at"] = int(time.time())
+        meta[name] = rec
+        _save_saves_meta(meta)
+
         payload = dict(
             success=True,
             message=f"「{name}」を保存しました",
@@ -608,31 +799,97 @@ def save_local():
     except Exception as e:
         return jsonify(success=False, message=f"保存に失敗：{e}"), 500
 
+
 @app.route("/saves")
 def saves_list():
+    uid = session.get("user_id")
+    meta = _load_saves_meta()
+
     files = []
     try:
         for name in os.listdir(SAVES_DIR):
             if not name.lower().endswith(".txt"):
                 continue
+
             p = os.path.join(SAVES_DIR, name)
+            if not os.path.isfile(p):
+                continue
+
+            m = meta.get(name, {})
+            # owner が付いていて、他人のものなら表示しない
+            if m.get("owner") and m.get("owner") != uid:
+                continue
+
             st = os.stat(p)
             files.append({
                 "name": name,
                 "size": st.st_size,
-                "size_kb": round(st.st_size/1024, 1),
+                "size_kb": round(st.st_size / 1024, 1),
                 "mtime": st.st_mtime,
                 "mtime_str": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                "visibility": m.get("visibility", "private"),
+                "pinned": bool(m.get("pinned", False)),
             })
-        # 新しい順
-        files.sort(key=lambda x: x["mtime"], reverse=True)
+
+        # ピン → 新しい順
+        files.sort(key=lambda x: (not x["pinned"], -x["mtime"]))
+
     except Exception as e:
         flash(f"保存一覧の取得に失敗しました: {e}")
         files = []
-    return render_template(
-        "saves.html",
-        files=files,
-    )
+
+    return render_template("saves.html", files=files)
+
+@app.route("/saves/visibility", methods=["POST"])
+def saves_set_visibility():
+    uid = session.get("user_id")
+    fname = os.path.basename((request.form.get("fname") or "").strip())
+    vis = (request.form.get("visibility") or "private").strip()
+
+    if not fname or not fname.lower().endswith(".txt"):
+        abort(400)
+    if vis not in ("private", "unlisted", "public"):
+        abort(400)
+
+    meta = _load_saves_meta()
+    rec = meta.get(fname, {})
+
+    if rec.get("owner") and rec.get("owner") != uid:
+        abort(403)
+
+    rec.setdefault("owner", uid)
+    rec.setdefault("pinned", False)
+    rec["visibility"] = vis
+    rec["updated_at"] = int(time.time())
+    meta[fname] = rec
+    _save_saves_meta(meta)
+
+    flash(f"{fname} の公開設定を {vis} にしました")
+    return redirect(url_for("saves_list"))
+
+
+@app.route("/saves/pin", methods=["POST"])
+def saves_toggle_pin():
+    uid = session.get("user_id")
+    fname = os.path.basename((request.form.get("fname") or "").strip())
+
+    if not fname or not fname.lower().endswith(".txt"):
+        abort(400)
+
+    meta = _load_saves_meta()
+    rec = meta.get(fname, {})
+
+    if rec.get("owner") and rec.get("owner") != uid:
+        abort(403)
+
+    rec.setdefault("owner", uid)
+    rec.setdefault("visibility", "private")
+    rec["pinned"] = not bool(rec.get("pinned", False))
+    rec["updated_at"] = int(time.time())
+    meta[fname] = rec
+    _save_saves_meta(meta)
+
+    return redirect(url_for("saves_list"))
 
 
 @app.route("/saves/auto_open")
@@ -650,8 +907,6 @@ def _no_cache_static(resp):
         resp.headers['Pragma'] = 'no-cache'
         resp.headers['Expires'] = '0'
     return resp
-
-
 
 if __name__ == "__main__":
     import os

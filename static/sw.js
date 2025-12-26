@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_VERSION = "pixi-v8.1";              // ← 上げる
+const CACHE_VERSION = "pixi-v10.4";              // ← 上げる
 const STATIC_ASSETS = ["/", "/static/icon-192.png", "/static/icon-512.png"]; // ← CSS/JSは入れない
 
 self.addEventListener("install", (e) => {
@@ -70,3 +70,4 @@ self.addEventListener("fetch", (e) => {
   }
   e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));
 });
+

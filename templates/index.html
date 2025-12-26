@@ -1,16 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- ===== ヒーロー / ガイド ===== -->
-<section class="hero-card">
-  <span class="hero-card__badge">Creative Workspace</span>
-  <h2 class="hero-card__title">PixiText Studio</h2>
-  <p class="hero-card__lead">テキストと挿絵をローカル環境でスムーズに扱うためのモダンな制作ツールです。ドラフトの保存からギャラリー管理まで、すべてがワンクリックで完結します。</p>
-  <div class="hero-actions">
-    <a class="link-button primary" href="#editor">エディタを開く</a>
-    <a class="link-button subtle" href="{{ url_for('gallery') }}">ギャラリーを見る</a>
-  </div>
-</section>
 
 <!-- ===== エディタ ===== -->
 <section class="panel panel--editor" id="editor">
@@ -18,7 +8,7 @@
     <div class="panel-heading__text">
       <span class="panel-kicker">Writing Toolkit</span>
       <h2 class="panel-title">本文エディタ</h2>
-      <p class="panel-description">タグショートカットやプレビューを活用しながら、作品原稿を磨き上げましょう。入力内容はブラウザ内に自動保存されます。</p>
+      <p class="panel-description">ここで編集しましょう。入力内容はブラウザ内に自動保存されます。</p>
     </div>
   </header>
 
@@ -75,101 +65,6 @@
     </div>
 
   </form>
-</section>
-
-<!-- ===== 簡易プレビュー（トップページ） ===== -->
-<section class="panel panel--preview">
-  <header class="panel-heading">
-    <div class="panel-heading__text">
-      <span class="panel-kicker">Quick Preview</span>
-      <h2 class="panel-title">簡易プレビュー</h2>
-      <p class="panel-description">画像ギャラリーや保存一覧と同じ場所から、ページ分割後の本文を確認できます。</p>
-    </div>
-    <div class="panel-actions">
-      <a class="link-button subtle" href="{{ url_for('preview', p=1) }}">詳細プレビュー</a>
-      <a class="link-button" href="{{ url_for('read_single', p=1) }}">ページ送りで読む</a>
-    </div>
-  </header>
-
-  <div class="rendered" data-preview-panel>
-    <p class="empty-hint" data-preview-empty>本文を入力するとここにプレビューが表示されます。</p>
-
-    <div class="preview-box" data-preview-box hidden>
-      <label for="inline-preview-text" class="page-text__label">このページの本文</label>
-      <textarea id="inline-preview-text" class="page-text__area" readonly data-preview-text></textarea>
-      <div class="preview-nav">
-        <button type="button" data-preview-prev>前のページ</button>
-        <span class="preview-counter" data-preview-counter>1 / 1</span>
-        <button type="button" data-preview-next>次のページ</button>
-        <button type="button" class="subtle" data-preview-refresh>プレビューを更新</button>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===== 画像アップロード ===== -->
-<section class="panel">
-  <header class="panel-heading">
-    <div class="panel-heading__text">
-      <span class="panel-kicker">Illustration Assets</span>
-      <h2 class="panel-title">画像アップロード（挿絵）</h2>
-      <p class="panel-description">アップロード済みの画像はショートコードとして呼び出せます。必要に応じてギャラリーから整理・削除してください。</p>
-    </div>
-  </header>
-
-  <!-- base.html 側の “未選択トースト” と style.css のカスタムUIに対応 -->
-  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
-    <label class="file-uploader">
-      <input type="file" name="file" accept="image/*">
-      <span class="fu-btn">ファイルを選択</span>
-      <span class="fu-name" data-placeholder="ファイルが選択されていません">ファイルが選択されていません</span>
-    </label>
-    <button type="submit" class="primary">アップロード</button>
-  </form>
-
-  <!-- ===== ミニギャラリー ===== -->
-  {% if gallery_items %}
-    <div class="panel-divider"></div>
-    <div class="panel-heading panel-heading--compact">
-      <div class="panel-heading__text">
-        <h3 class="panel-title">アップロード済み画像</h3>
-        <p class="panel-description">ショートコードをコピーして本文に貼り付けると挿絵として表示されます。</p>
-      </div>
-    </div>
-
-    <div class="mg-grid">
-      {% for it in gallery_items %}
-      <div class="mg-card">
-        <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank" rel="noopener">
-          <img src="{{ url_for('image_by_id', img_id=it.id) }}" alt="{{ it.original_name or it.stored_name }}">
-        </a>
-        <div class="mg-body">
-          <div class="mg-name" title="{{ it.original_name or it.stored_name }}">{{ it.original_name or it.stored_name }}</div>
-
-          <div class="mg-actions">
-            <input id="tag-{{ it.id }}" class="mg-code" type="text" readonly value="[uploadedimage:{{ it.id }}]">
-            <button class="mg-btn copy" type="button" data-copy="[uploadedimage:{{ it.id }}]">コピー</button>
-
-            <!-- base.html の confirm モーダル（.js-delete）で横取りしてから submit -->
-            <form method="post"
-                  action="{{ url_for('delete_image', img_id=it.id, next='index') }}"
-                  class="js-delete" data-id="{{ it.id }}">
-              <button class="mg-btn delete" type="submit">削除</button>
-            </form>
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-
-    <p class="mg-toplink">
-      <a href="{{ url_for('gallery') }}" class="link-button">すべての画像を一覧表示</a>
-    </p>
-  {% else %}
-    <p class="empty-hint">まだ画像がありません。上のフォームからアップロードしてください。</p>
-  {% endif %}
-
-  </section>
 
   {% if cloud_targets %}
 <section class="panel panel--cloud" id="cloud-mirror">

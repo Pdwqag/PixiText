@@ -5,12 +5,31 @@
     <div class="panel-heading__text">
       <span class="panel-kicker">Gallery</span>
       <h2 class="panel-title">アップロード一覧</h2>
-      <p class="panel-description">生成されたショートコードは本文からいつでも呼び出せます。不要になったファイルはここで整理しましょう。</p>
-    </div>
-    <div class="panel-actions">
-      <a href="{{ url_for('index') }}" class="link-button subtle">← エディタへ戻る</a>
+      <p class="panel-description">保存している画像です。</p>
     </div>
   </header>
+
+  <!-- ===== 画像アップロード ===== -->
+<section class="panel">
+  <header class="panel-heading">
+    <div class="panel-heading__text">
+      <span class="panel-kicker">Illustration Assets</span>
+      <h2 class="panel-title">画像アップロード（挿絵）</h2>
+      <p class="panel-description">サイズは調整しますがちゃんと考慮してください</p>
+    </div>
+  </header>
+
+  <!-- base.html 側の “未選択トースト” と style.css のカスタムUIに対応 -->
+  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+    <label class="file-uploader">
+      <input type="file" name="file" accept="image/*">
+      <span class="fu-btn">ファイルを選択</span>
+      <span class="fu-name" data-placeholder="ファイルが選択されていません">ファイルが選択されていません</span>
+      <button type="submit" class="primary">アップロード</button>
+    </label>
+  </form>
+</section>
+
 
   {% if cloud_targets %}
     <div class="cloud-callout-stack">
@@ -29,20 +48,54 @@
     <div class="mg-grid mg-grid-lg">
       {% for it in items %}
         <div class="mg-card">
-          <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank" rel="noopener">
-            <img src="{{ url_for('image_by_id', img_id=it.id) }}"
-                 alt="{{ it.original_name or it.stored_name }}">
+          <!-- ★ 角アイコンレイヤー -->
+          <div class="mg-corner">
+            <!-- 左上：公開状態 -->
+            <form method="post"
+                  action="{{ url_for('set_visibility', img_id=it.id) }}"
+                  class="corner-left js-vis-toggle"
+                  data-current="{{ it.visibility }}">
+              <input type="hidden" name="visibility" value="{{ it.visibility }}">
+              <button type="button" class="corner-btn" title="公開範囲を切り替え">
+                {% if it.visibility == 'public' %}
+                  <img src="{{ url_for('static', filename='picture/earth.png') }}">
+                {% elif it.visibility == 'unlisted' %}
+                  <img src="{{ url_for('static', filename='picture/chain.png') }}">
+                {% else %}
+                  <img src="{{ url_for('static', filename='picture/lock.png') }}">
+                {% endif %}
+              </button>
+            </form>
+            <!-- 右上：削除 -->
+            <form method="post"
+                  action="{{ url_for('delete_image', img_id=it.id, next='gallery') }}"
+                  class="corner-right js-delete"
+                  data-what="画像"
+                  data-id="{{ it.id }}">
+              <button type="submit" class="corner-btn danger" title="削除">
+                <img src="{{ url_for('static', filename='picture/cross.png') }}">
+              </button>
+            </form>
+          </div>
+
+          <!-- 既存のサムネ -->
+          <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank">
+            <img src="{{ url_for('image_by_id', img_id=it.id) }}">
           </a>
           <div class="mg-body">
-            <div class="mg-name" title="{{ it.original_name or it.stored_name }}">{{ it.original_name or it.stored_name }}</div>
-            <div class="mg-actions">
-              <input class="mg-code" type="text" readonly value="[uploadedimage:{{ it.id }}]">
-              <button class="mg-btn copy" type="button" data-copy="[uploadedimage:{{ it.id }}]">コピー</button>
-              <form method="post"
-                    action="{{ url_for('delete_image', img_id=it.id, next='index') }}"
-                    class="js-delete" data-id="{{ it.id }}">
-                <button class="mg-btn delete" type="submit">削除</button>
-              </form>
+            <!-- ★ タイトル＋コピー（横並び） -->
+            <div class="mg-title-row">
+              <div class="mg-name" title="{{ it.original_name or it.stored_name }}">
+                [uploadedimage:{{ it.id }}]
+              </div>
+
+              <button
+                class="copy-inline"
+                type="button"
+                data-copy="[uploadedimage:{{ it.id }}]"
+                title="タグをコピー">
+                <img class="ui-icon" src="{{ url_for('static', filename='picture/copy.png') }}">
+              </button>
             </div>
           </div>
         </div>
@@ -52,7 +105,7 @@
     <p class="empty-hint">まだ画像がありません。エディタからアップロードしてください。</p>
   {% endif %}
 
-  <div class="panel-divider"></div>
+  <!-- <div class="panel-divider"></div>
   {% if cloud_manifest.gcs.enabled %}
     <section class="cloud-note cloud-note--accent" aria-label="Google Cloud Storage 情報">
       <p><strong>Google Cloud Storage を確認する</strong></p>
@@ -78,6 +131,6 @@
     </section>
   {% else %}
     <p class="cloud-note">Google Cloud Storage を有効化すると、ここにバックアップへのショートカットが表示されます。</p>
-  {% endif %}
+  {% endif %} -->
 </section>
 {% endblock %}
