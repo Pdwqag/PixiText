@@ -37,8 +37,8 @@
 
       <div class="mg-body">
         <div class="mg-id">{{ it.id }}</div>
-        {% if it.owner %}
-          <div class="mg-name">by {{ it.owner }}</div>
+        {% if it.owner or it.owner_name %}
+          <div class="mg-name">by {{ it.owner_name or it.owner }}</div>
         {% endif %}
 
         <div class="mg-actions mg-actions--explore">

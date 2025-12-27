@@ -80,6 +80,7 @@ window.addEventListener('pageshow', (e) => {
   document.addEventListener('click', function(e){
     const btn = e.target.closest('button.ins');
     if (!btn) return;
+    if (!btn.dataset.insert) return; // data-insert が無い場合は何も挿入しない（undefined混入防止）
     const ta = document.getElementById('text');
     if (!ta) return;
     insertAtCursor(ta, btn.dataset.insert);
