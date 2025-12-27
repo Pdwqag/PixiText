@@ -6,33 +6,5 @@
     "ts": 1766759951,
     "owner": "u_1766722375733",
     "visibility": "public"
-  },
-  "986354": {
-    "stored_name": "sample-1.png",
-    "original_name": "sample.png",
-    "original_name_safe": "sample.png",
-    "ts": 1766760355,
-    "owner": "u_1766717973325",
-    "visibility": "private",
-    "deleted_at": 1766760360,
-    "trash_path": "986354__sample-1.png"
-  },
-  "210621": {
-    "stored_name": "sample-1.png",
-    "original_name": "sample.png",
-    "original_name_safe": "sample.png",
-    "ts": 1766760536,
-    "owner": "u_1766717973325",
-    "visibility": "private"
-  },
-  "222014": {
-    "stored_name": "danjin___wuthering_waves__by_zazpr_dghxjri-fullview.jpg",
-    "original_name": "danjin___wuthering_waves__by_zazpr_dghxjri-fullview.jpg",
-    "original_name_safe": "danjin___wuthering_waves__by_zazpr_dghxjri-fullview.jpg",
-    "ts": 1766766148,
-    "owner": "u_1766722375733",
-    "visibility": "private",
-    "deleted_at": 1766847887,
-    "trash_path": "222014__danjin___wuthering_waves__by_zazpr_dghxjri-fullview.jpg"
   }
 }

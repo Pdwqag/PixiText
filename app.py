@@ -123,7 +123,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.config.update(
     SECRET_KEY=os.getenv("SECRET_KEY", "change-me"),  # override via env in production
     UPLOAD_FOLDER=UPLOAD_DIR,
-    BUILD_VER=CACHE_VERSION,  # cache buster synced with sw.js
+    BUILD_VER=CACHE_VERSION,  # cache buster
 
     # Flask-Session
     SESSION_TYPE="filesystem",
