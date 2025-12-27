@@ -559,7 +559,9 @@ def explore():
         hay = f"{img_id} {title}".lower()
         if q and q not in hay:
             continue
-        items.append({"id": img_id, **rec})
+        owner_id = rec.get("owner", "")
+        owner_name = users_db.get(owner_id, {}).get("username", owner_id)
+        items.append({"id": img_id, "owner_name": owner_name, **rec})
     items.sort(key=lambda x: x.get("ts", 0), reverse=True)
     return render_template("explore_gallery.html", q=request.args.get("q", ""), items=items, type=t)
 

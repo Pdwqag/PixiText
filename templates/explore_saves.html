@@ -32,9 +32,12 @@
       <div class="mg-card save-card">
 
         <div class="mg-body save-body">
-          <div class="save-title-row">
-            <div class="save-title" title="{{ f.name }}">{{ f.name }}</div>
+          <div class="mg-id" title="{{ f.name }}">{{ f.name }}</div>
+          {% if f.owner %}
+            <div class="mg-name">by {{ f.owner }}</div>
+          {% endif %}
 
+          <div class="save-controls--explore">
             <div class="save-actions">
               <a class="btn btn-mini" href="{{ url_for('saves_public_view', fname=f.name) }}">
                 読む
@@ -55,7 +58,6 @@
               </form>
             </div>
           </div>
-
         </div>
 
       </div>
