@@ -31,9 +31,7 @@
     {% for f in files %}
       <div class="mg-card save-card">
         <div class="mg-body save-body">
-          <div class="save-title-row">
-            <div class="save-title" title="{{ f.name }}">{{ f.name }}</div>
-          </div>
+          <div class="save-title" title="{{ f.name }}">{{ f.name }}</div>
           {% if f.owner %}
             <div class="save-author">by {{ f.owner }}</div>
           {% endif %}
