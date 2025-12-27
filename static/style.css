@@ -888,7 +888,7 @@ a.jump{ text-decoration:underline; cursor:pointer; }
   content:"";
   position:absolute;
   inset:auto -30% -60% -30%;
-  height:120%;
+  height: 117%;
   background:radial-gradient(circle at 50% 0, rgba(110,170,255,.28), transparent 70%);
   opacity:.4;
   pointer-events:none;
@@ -901,7 +901,7 @@ a.jump{ text-decoration:underline; cursor:pointer; }
 .mg-thumb > img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; }
 .mg-body{ padding:18px; position:relative; z-index:1; }
 .mg-id{ font:700 .95rem/1.2 var(--sans); letter-spacing:.08em; color:#f0f4ff; }
-.mg-name{ color:rgba(200,210,230,.7); font-size:.86rem; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mg-name{ color:rgba(200,210,230,.7); font-size:.86rem; margin-top:6px; white-space:nowrap; text-overflow:ellipsis; }
 .mg-actions{ display:flex; align-items:center; gap:10px; margin-top:14px; }
 .mg-code{
   flex:1;
@@ -2535,7 +2535,7 @@ select option{
   padding: 0; /* mg-card側に余計なpaddingが入ってる場合の事故防止 */
   display:flex;
   flex-direction:column;
-  min-height: 320px; /* 画像ギャラリーと高さ感を揃える */
+  min-height: 155px; /* 画像ギャラリーと高さ感を揃える */
 }
 
 .explore-saves .save-thumb{
@@ -2594,7 +2594,7 @@ select option{
   display:flex;
   flex-direction:column;
   gap:12px;
-  height:100%;
+  height: 25%;
 }
 
 /* ここが崩れの本体：タイトル行はflexで固定 */

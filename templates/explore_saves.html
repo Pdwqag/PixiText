@@ -30,14 +30,6 @@
   <div class="mg-grid mg-grid-lg explore-saves-grid">
     {% for f in files %}
       <div class="mg-card save-card">
-
-        <div class="save-thumb">
-          <div class="save-thumb__inner">
-            <div class="save-thumb__badge">文章</div>
-            <div class="save-thumb__title" title="{{ f.name }}">{{ f.name }}</div>
-          </div>
-        </div>
-
         <div class="mg-body save-body">
           <div class="save-title" title="{{ f.name }}">{{ f.name }}</div>
           {% if f.owner %}
