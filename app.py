@@ -104,7 +104,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.config.update(
     SECRET_KEY=os.getenv("SECRET_KEY", "change-me"),  # override via env in production
     UPLOAD_FOLDER=UPLOAD_DIR,
-    BUILD_VER=10.3,  # cache buster
+    BUILD_VER=10.5,  # cache buster
 
     # Flask-Session
     SESSION_TYPE="filesystem",
