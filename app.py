@@ -311,6 +311,7 @@ def require_login():
         "saves_public",
         "saves_public_view",
         "explore",
+        "saves_public_raw",
     ):
         return
 
@@ -591,31 +592,6 @@ def image_by_id(img_id):
     return resp
 
 
-@app.route("/image/<img_id>/visibility", methods=["POST"])
-def set_visibility(img_id):
-    db = _load_db()
-    rec = db.get(img_id)
-    if not rec:
-        abort(404)
-
-    uid = session.get("user_id")
-    rec.setdefault("visibility", "private")
-
-    if rec.get("owner") != uid:
-        abort(403)
-
-    vis = (request.form.get("visibility") or "private").strip()
-    if vis not in ("private", "unlisted", "public"):
-        abort(400)
-
-    rec["visibility"] = vis
-    db[img_id] = rec
-    _save_db(db)
-
-    flash(f"公開設定を {vis} にしました")
-    return redirect(url_for("gallery"))
-
-
 @app.route("/images/import", methods=["POST"])
 def images_import():
     uid = session.get("user_id")
@@ -761,6 +737,7 @@ def upload():
         "ts": int(time.time()),
         "owner": session.get("user_id"),
         "visibility": "private",
+        "title": request.form.get("title") or None,
     }
     _save_db(db)
 
@@ -1178,20 +1155,24 @@ def saves_open():
     flash(f"読み込みました: {fname}")
     return redirect(url_for("index"))
 
-@app.get("/saves_public_raw/<path:fname>")
+@app.get("/_raw/<path:fname>")
 def saves_public_raw(fname):
-    # 公開ディレクトリのパスはあなたの実装に合わせて変更
-    public_dir = Path(SAVES_DIR)   # 例: BASE_DIR/"public_saves"
-    p = (public_dir / fname).resolve()
+    fname = os.path.basename((fname or "").strip())
+    if not fname or not fname.lower().endswith(".txt"):
+        abort(404)
 
-    # ディレクトリ外参照対策
-    if public_dir.resolve() not in p.parents and p != public_dir.resolve():
-      abort(403)
+    meta = _load_saves_meta()
+    m = meta.get(fname, {})
+    if m.get("deleted_at"):
+        abort(404)
+    if m.get("visibility") != "public":
+        abort(404)
 
-    if not p.exists() or not p.is_file():
-      abort(404)
+    p = os.path.join(SAVES_DIR, fname)
+    if not os.path.isfile(p):
+        abort(404)
 
-    text = p.read_text(encoding="utf-8", errors="replace")
+    text = Path(p).read_text(encoding="utf-8", errors="replace")
     return Response(text, mimetype="text/plain; charset=utf-8")
 
 
@@ -1227,6 +1208,26 @@ def saves_set_visibility():
 
     flash(f"{fname} の公開設定を {vis} にしました")
     return redirect(url_for("saves_list"))
+    
+@app.route("/image/<img_id>/visibility", methods=["POST"])
+def set_visibility(img_id):
+    uid = session.get("user_id")
+    vis = (request.form.get("visibility") or "private").strip()
+
+    db = _load_db()
+    rec = db.get(img_id)
+
+    if not rec:
+        abort(404)
+    if rec.get("owner") != uid:
+        abort(403)
+
+    rec["visibility"] = vis
+    db[img_id] = rec
+    _save_db(db)
+
+    return redirect(url_for("gallery"))
+
 
 
 @app.route("/saves/pin", methods=["POST"])
@@ -1297,6 +1298,13 @@ def saves_public():
 
 @app.route("/saves/public/view")
 def saves_public_view():
+    meta = _load_saves_meta()
+    m = meta.get(fname, {})
+    if m.get("deleted_at"):
+        abort(404)
+    if m.get("visibility") != "public":
+        abort(404)
+
     fname = request.args.get("fname", "")
     if not fname:
         abort(404)

@@ -17,7 +17,7 @@
     {% if q %}<a class="btn" href="{{ url_for('gallery') }}">クリア</a>{% endif %}
   </form>
 
-  <!-- ===== 画像アップロード（折りたたみ） ===== -->
+<!-- ===== 画像アップロード（折りたたみ） ===== -->
   <details class="panel panel-collapsible" id="uploadPanel">
     <summary class="panel-collapsible__summary">
       <div class="panel-heading__text">
@@ -51,159 +51,91 @@
     </div>
   </details>
 
-
-  {% if cloud_targets %}
-    <div class="cloud-callout-stack">
-      {% for provider in cloud_targets %}
-        {% if provider.uploads_url %}
-          <div class="cloud-callout" role="note">
-            <span class="cloud-callout__badge">{{ provider.label }}</span>
-            <p class="cloud-callout__text">クラウド上の <code>uploads/</code> バックアップを開きます。<a href="{{ provider.uploads_url }}" target="_blank" rel="noopener">{{ provider.label }} で開く</a></p>
-          </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  {% endif %}
-
   {% if items %}
-    <div class="mg-grid mg-grid-lg">
-      {% for it in items %}
-        {% set vis = it.visibility %}
-        <div class="mg-card">
-          <!-- ★ 角アイコンレイヤー -->
-          <div class="mg-corner">
-            <!-- 左上：公開状態 -->
-            <form method="post" action="{{ url_for('set_visibility', img_id=it.id) }}" class="corner-left">
-              <input type="hidden" name="visibility" value="{{ next_vis }}">
-              <button type="submit" class="corner-btn" title="公開範囲を切り替え">
-                {% if vis == 'public' %}
-                  <img src="{{ url_for('static', filename='picture/earth.png') }}">
-                {% elif vis == 'unlisted' %}
-                  <img src="{{ url_for('static', filename='picture/chain.png') }}">
-                {% else %}
-                  <img src="{{ url_for('static', filename='picture/lock.png') }}">
-                {% endif %}
-              </button>
-            </form>
-            <!-- 右上：削除 -->
-            <form method="post"
-                  action="{{ url_for('delete_image', img_id=it.id, next='gallery') }}"
-                  class="corner-right js-delete"
-                  data-what="画像"
-                  data-id="{{ it.id }}">
-              <button type="submit" class="corner-btn danger" title="削除">
-                <img src="{{ url_for('static', filename='picture/cross.png') }}">
-              </button>
-            </form>
-          </div>
+  <div class="mg-grid mg-grid-lg">
 
-          <!-- 既存のサムネ -->
-          <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank">
-            <img src="{{ url_for('image_by_id', img_id=it.id) }}">
-          </a>
-          
-          <div class="mg-body">
-            <div class="mg-title" title="{{ it.title or it.original_name or it.stored_name }}">
-              {{ it.title or it.original_name or it.stored_name }}
-            </div>
+    {% for it in items %}
+      {% set vis = it.visibility %}
+      {% if vis == 'public' %}
+        {% set next_vis = 'unlisted' %}
+      {% elif vis == 'unlisted' %}
+        {% set next_vis = 'private' %}
+      {% else %}
+        {% set next_vis = 'public' %}
+      {% endif %}
 
-            <div class="mg-title-row">
-              <div class="mg-tag" title="タグ">
-                [uploadedimage:{{ it.id }}]
-              </div>
+      <div class="mg-card">
 
-              <button
-                class="copy-inline"
-                type="button"
-                data-copy="[uploadedimage:{{ it.id }}]"
-                title="タグをコピー">
-                <img class="ui-icon" src="{{ url_for('static', filename='picture/copy.png') }}">
-              </button>
-            </div>
-          </div>
+        <!-- 角アイコン -->
+        <div class="mg-corner">
+          <!-- 公開切替 -->
+          <form method="post"
+                action="{{ url_for('set_visibility', img_id=it.id) }}"
+                class="corner-left">
+            <input type="hidden" name="visibility" value="{{ next_vis }}">
+            <button type="submit" class="corner-btn" title="公開範囲を切り替え">
+              {% if vis == 'public' %}
+                <img src="{{ url_for('static', filename='picture/earth.png') }}">
+              {% elif vis == 'unlisted' %}
+                <img src="{{ url_for('static', filename='picture/chain.png') }}">
+              {% else %}
+                <img src="{{ url_for('static', filename='picture/lock.png') }}">
+              {% endif %}
+            </button>
+          </form>
 
+          <!-- 削除 -->
+          <form method="post"
+                action="{{ url_for('delete_image', img_id=it.id) }}"
+                class="corner-right">
+            <button type="submit" class="corner-btn danger" title="削除">
+              <img src="{{ url_for('static', filename='picture/cross.png') }}">
+            </button>
+          </form>
         </div>
-      {% endfor %}
-    </div>
+
+        <!-- サムネ -->
+        <a class="mg-thumb" href="{{ url_for('image_by_id', img_id=it.id) }}" target="_blank">
+          <img src="{{ url_for('image_by_id', img_id=it.id) }}">
+        </a>
+
+        <!-- 情報 -->
+        <div class="mg-body">
+          <div class="mg-title"
+               title="{{ it.title or it.original_name or it.stored_name }}">
+            {{ it.title or it.original_name or it.stored_name }}
+          </div>
+
+          <div class="mg-title-row">
+            <div class="mg-tag">
+              [uploadedimage:{{ it.id }}]
+            </div>
+
+            <button class="copy-inline"
+                    type="button"
+                    data-copy="[uploadedimage:{{ it.id }}]"
+                    title="タグをコピー">
+              <img class="ui-icon"
+                   src="{{ url_for('static', filename='picture/copy.png') }}">
+            </button>
+          </div>
+        </div>
+
+      </div>
+    {% endfor %}
+
+  </div>
   {% else %}
     <p class="empty-hint">まだ画像がありません。エディタからアップロードしてください。</p>
   {% endif %}
 
-  <!-- <div class="panel-divider"></div>
-  {% if cloud_manifest.gcs.enabled %}
-    <section class="cloud-note cloud-note--accent" aria-label="Google Cloud Storage 情報">
-      <p><strong>Google Cloud Storage を確認する</strong></p>
-      {% set creds = cloud_manifest.gcs.credentials %}
-      <ul>
-        <li>プロジェクト ID: <code>{{ cloud_manifest.gcs.project }}</code></li>
-        <li>バケット名: <code>{{ cloud_manifest.gcs.bucket }}</code></li>
-        <li>対象フォルダ: <code>{{ gcs_upload_prefix }}</code></li>
-        {% if creds.source %}
-          <li>資格情報ソース: <code>{{ creds.source }}</code>{% if creds.path %} (<code>{{ creds.path }}</code>){% endif %}</li>
-        {% endif %}
-      </ul>
-      <p>コンソールから対象バケットの <code>{{ gcs_upload_prefix }}</code> プレフィックス内にファイルが生成されているか確認してください。</p>
-      {% if creds.env_path %}
-        <p class="cloud-note__hint">GOOGLE_APPLICATION_CREDENTIALS: <code>{{ creds.env_path }}</code>
-          {% if creds.env_path_exists %}
-            は解決済みです。
-          {% else %}
-            が見つかりません。デプロイ環境にファイルが存在するか確認してください。
-          {% endif %}
-        </p>
-      {% endif %}
-    </section>
-  {% else %}
-    <p class="cloud-note">Google Cloud Storage を有効化すると、ここにバックアップへのショートカットが表示されます。</p>
-  {% endif %} -->
 </section>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const fileInput   = document.getElementById('uploadFile');
-  const nameSpan    = document.querySelector('.file-uploader .fu-name');
-  const previewWrap = document.getElementById('uploadPreviewWrap');
-  const previewImg  = document.getElementById('uploadPreview');
-
-  if (!fileInput || !previewWrap || !previewImg) return;
-
-  // 念のため初期状態は非表示
-  previewWrap.hidden = true;
-
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files && fileInput.files[0];
-
-    // ファイル名表示
-    if (nameSpan) {
-      nameSpan.textContent = file
-        ? file.name
-        : (nameSpan.dataset.placeholder || 'ファイルが選択されていません');
-    }
-
-    // 未選択・画像以外 → 非表示
-    if (!file || !file.type.startsWith('image/')) {
-      previewWrap.hidden = true;
-      previewImg.removeAttribute('src');
-      return;
-    }
-
-    // プレビュー表示
-    const url = URL.createObjectURL(file);
-    previewImg.src = url;
-    previewWrap.hidden = false;
-
-    // メモリ解放
-    previewImg.onload = () => URL.revokeObjectURL(url);
-  });
-});
-
 async function copyText(text){
-  // 1) Clipboard API（HTTPS/localhost）
   if (navigator.clipboard && window.isSecureContext) {
     return navigator.clipboard.writeText(text);
   }
-
-  // 2) フォールバック（HTTPでも動くことが多い）
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.style.position = "fixed";
@@ -217,21 +149,14 @@ async function copyText(text){
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-copy]");
   if (!btn) return;
-
-  const text = btn.dataset.copy;
-  if (!text) return;
-
   try {
-    await copyText(text);
+    await copyText(btn.dataset.copy);
     btn.classList.add("copied");
     setTimeout(() => btn.classList.remove("copied"), 1200);
-  } catch (err) {
+  } catch {
     alert("コピーに失敗しました");
-    console.error(err);
   }
 });
-
 </script>
-
 
 {% endblock %}

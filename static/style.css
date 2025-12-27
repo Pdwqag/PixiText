@@ -1424,28 +1424,6 @@ figure.pixiv-illustration figcaption a {
   text-decoration: none;
 }
 
-/* ===== スマホではサイト上部ヘッダーを消す ===== */
-@media (max-width: 768px) {
-  .site-header {
-    display: none !important;
-  }
-
-  /* ヘッダーが消えた分、上の余白も詰める */
-  .site-main {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-  }
-}
-
-@media (max-width: 768px) {
-  .back-button.nav-cta {
-    padding: 6px 10px !important;
-    min-width: 0 !important;
-    width: auto !important;
-    font-size: 0.9em;
-    gap: 6px;
-  }
-}
 
 /* =========================================================
    Saves：一覧を見やすく整える（最終調整）

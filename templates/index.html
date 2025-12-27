@@ -173,6 +173,75 @@
     } catch (e) { /* ignore */ }
   });
 })();
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-insert]");
+  if (!btn) return;
+
+  const insert = btn.dataset.insert;
+  const ta = document.getElementById("text");
+  if (!ta || !insert) return;
+
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+
+  ta.value =
+    ta.value.slice(0, start) +
+    insert +
+    ta.value.slice(end);
+
+  ta.selectionStart = ta.selectionEnd = start + insert.length;
+  ta.focus();
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-ajax-preview]");
+  if (!btn) return;
+
+  // ★ 絶対にsubmitさせない
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+
+  const form = btn.closest("form");
+  if (!form) return;
+
+  const ta = form.querySelector('textarea[name="text"]');
+  if (ta && typeof ta.value === "string") {
+    // ★ 念のため先頭のundefinedを除去（症状止血）
+    ta.value = ta.value.replace(/^undefined\s*/i, "");
+  }
+
+  // ★ 普通に /preview に遷移（サーバ側プレビューに任せる）
+  form.submit();
+}, true); // ← ★ captureで先に奪う
+
+
+  try {
+    const r = await fetch("/api/preview_page", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, writing_mode, p: 1 }),
+    });
+
+    const data = await r.json();
+
+    if (!data || data.success !== true) {
+      alert((data && data.message) ? data.message : "プレビュー生成に失敗しました");
+      return;
+    }
+
+    // ★ ここが重要：存在しないキーを読まない（undefined混入防止）
+    const html = data.page_html ?? "";
+    previewBox.innerHTML = html;
+
+  } catch (err) {
+    console.error(err);
+    alert("プレビュー生成に失敗しました");
+  }
+});
+
+
 </script>
 
 {% endblock %}
