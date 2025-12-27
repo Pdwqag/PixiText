@@ -25,7 +25,7 @@
       <button type="button" class="ins" data-insert="[[rb:漢字 > かんじ]]">[[rb]]</button>
       <button type="button" class="ins" data-insert="[pixivimage:]">[pixivimage]</button>
             <!-- プレビュー -->
-      <button type="submit" class="ins ins-preview" data-ajax-preview title="プレビュー (Ctrl+Enter)">
+      <button type="submit" class="ins-preview" data-ajax-preview title="プレビュー (Ctrl+Enter)">
         <img class="ui-icon" src="{{ url_for('static', filename='picture/keyboard.png') }}" alt="" aria-hidden="true">
         プレビュー
       </button>
@@ -128,120 +128,104 @@
 (() => {
   const textEl = document.getElementById('text');
   const nameEl = document.querySelector('input[name="filename"]');
-  const form   = document.querySelector('form[action$="/preview"]'); // プレビュー用フォーム
+  const previewForm = document.querySelector('form[action$="/preview"]'); // 送信自体は使わないがdraft保存に使う
+  const previewBox = document.getElementById('previewBox'); // ←あなたのDOMに合わせてID調整してOK
 
-  // draft 用キー
+  // ---- draft ----
   const draftKey = () => `pixi:draft:${(nameEl?.value || '(untitled)').trim()}`;
 
-  // 1) ロード時：下書きがあれば優先的に復元
   try {
     const k = draftKey();
     const draft = localStorage.getItem(k);
-    if (draft && draft !== textEl.value) {
-      // 自動復元（確認ダイアログにしたい場合は confirm に変更）
-      textEl.value = draft;
-    }
-  } catch(e){ /* ignore */ }
+    if (draft && textEl && draft !== textEl.value) textEl.value = draft;
+  } catch (e) {}
 
-  // 2) 入力の度に下書き保存（軽いデバウンス）
   let t = null;
   const saveDraft = () => {
-    try { localStorage.setItem(draftKey(), textEl.value); } catch(e){}
+    try { if (textEl) localStorage.setItem(draftKey(), textEl.value); } catch (e) {}
   };
   const debounced = () => { clearTimeout(t); t = setTimeout(saveDraft, 250); };
-  textEl.addEventListener('input', debounced);
+  textEl?.addEventListener('input', debounced);
 
-  // 3) ファイル名を変えたら、既存下書きはそのままにしつつ新キーへも保存
   nameEl?.addEventListener('change', () => {
-    saveDraft(); // 旧キーへまず保存
-    // 新キーにも複製（必要なら）
-    try { localStorage.setItem(draftKey(), textEl.value); } catch(e){}
-  });
-
-  // 4) プレビュー送信前にも必ず下書き保存
-  form?.addEventListener('submit', () => {
     saveDraft();
+    try { if (textEl) localStorage.setItem(draftKey(), textEl.value); } catch (e) {}
   });
 
-  // 5) ついでに「保存成功」時に下書きを“正”として固定（任意）
+  previewForm?.addEventListener('submit', () => saveDraft());
+
   document.addEventListener('pixi:saved', (ev) => {
     try {
-      if (ev?.detail?.filename && nameEl) {
-        nameEl.value = ev.detail.filename;
-      }
+      if (ev?.detail?.filename && nameEl) nameEl.value = ev.detail.filename;
       saveDraft();
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
   });
-})();
 
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-insert]");
-  if (!btn) return;
+  // ---- insert buttons ----
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-insert]");
+    if (!btn) return;
 
-  const insert = btn.dataset.insert;
-  const ta = document.getElementById("text");
-  if (!ta || !insert) return;
+    const insert = btn.dataset.insert;
+    const ta = document.getElementById("text");
+    if (!ta || !insert) return; // ←insert未定義なら何もしない（undefined混入防止）
 
-  const start = ta.selectionStart;
-  const end = ta.selectionEnd;
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
 
-  ta.value =
-    ta.value.slice(0, start) +
-    insert +
-    ta.value.slice(end);
+    ta.value = ta.value.slice(0, start) + insert + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = start + insert.length;
+    ta.focus();
+  });
 
-  ta.selectionStart = ta.selectionEnd = start + insert.length;
-  ta.focus();
-});
+  // ---- ajax preview ----
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-ajax-preview]");
+    if (!btn) return;
 
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-ajax-preview]");
-  if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-  // ★ 絶対にsubmitさせない
-  e.preventDefault();
-  e.stopPropagation();
-  e.stopImmediatePropagation();
+    const form = btn.closest("form");
+    const ta = form?.querySelector('textarea[name="text"]') || document.getElementById("text");
+    if (!ta) return;
 
-  const form = btn.closest("form");
-  if (!form) return;
-
-  const ta = form.querySelector('textarea[name="text"]');
-  if (ta && typeof ta.value === "string") {
-    // ★ 念のため先頭のundefinedを除去（症状止血）
+    // 念のため先頭のundefinedだけ除去（過去混入の止血）
     ta.value = ta.value.replace(/^undefined\s*/i, "");
-  }
 
-  // ★ 普通に /preview に遷移（サーバ側プレビューに任せる）
-  form.submit();
-}, true); // ← ★ captureで先に奪う
+    const writingModeEl = form?.querySelector('[name="writing_mode"]');
+    const writing_mode = writingModeEl?.value || "horizontal";
+    const text = ta.value;
 
+    saveDraft();
 
-  try {
-    const r = await fetch("/api/preview_page", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, writing_mode, p: 1 }),
-    });
+    try {
+      const r = await fetch("/api/preview_page", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, writing_mode, p: 1 }),
+      });
 
-    const data = await r.json();
+      const data = await r.json();
 
-    if (!data || data.success !== true) {
-      alert((data && data.message) ? data.message : "プレビュー生成に失敗しました");
-      return;
+      if (!data || data.success !== true) {
+        alert(data?.message ?? "プレビュー生成に失敗しました");
+        return;
+      }
+
+      if (previewBox) {
+        previewBox.innerHTML = data.page_html ?? "";
+      } else {
+        // previewBoxが無いなら遷移にフォールバックでもOK
+        console.warn("previewBox が見つからないため描画できません");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("プレビュー生成に失敗しました");
     }
-
-    // ★ ここが重要：存在しないキーを読まない（undefined混入防止）
-    const html = data.page_html ?? "";
-    previewBox.innerHTML = html;
-
-  } catch (err) {
-    console.error(err);
-    alert("プレビュー生成に失敗しました");
-  }
-});
-
-
+  }, true); // captureで先に取る
+})();
 </script>
+
 
 {% endblock %}

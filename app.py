@@ -688,21 +688,27 @@ def index():
 @app.route("/upload", methods=["POST"])
 def upload():
     file = request.files.get("file")
-    if not file or file.filename == "":
+    if not file:
         flash("ファイルが選択されていません")
-        return redirect(url_for("gallery"))
-    if not allowed_file(file.filename):
-        flash("対応していない拡張子です")
         return redirect(url_for("gallery"))
 
     orig_name = file.filename
+    if not orig_name:
+        flash("不正なファイル名です")
+        return redirect(url_for("gallery"))
+
+    if not allowed_file(orig_name):
+        flash("対応していない拡張子です")
+        return redirect(url_for("gallery"))
+
     ext = orig_name.rsplit(".", 1)[1].lower()
 
     db = _load_db()
     nid = _gen_id(db)
 
-    safe_name = secure_filename(orig_name) or f"image.{ext}"
+    safe_name = secure_filename(orig_name)
     root, current_ext = os.path.splitext(safe_name)
+
     if not current_ext:
         current_ext = f".{ext}"
     if current_ext.lower() != f".{ext}":
@@ -718,17 +724,16 @@ def upload():
 
     stored_name = candidate
     path = os.path.join(app.config["UPLOAD_FOLDER"], stored_name)
+
     file.save(path)
 
     mime_type = mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
-    gcs_result = gcs_upload_file(
+    gcs_upload_file(
         path,
         stored_name,
         prefix=app.config.get("GCS_UPLOAD_PREFIX"),
         content_type=mime_type,
     )
-    if gcs_result is False:
-        flash("クラウドバックアップ（Google Cloud Storage）に失敗しました。設定を確認してください。")
 
     db[nid] = {
         "stored_name": stored_name,
@@ -743,6 +748,7 @@ def upload():
 
     flash(f"アップロード完了: ID {nid}")
     return redirect(url_for("gallery"))
+
 
 
 # =========================
@@ -1298,6 +1304,12 @@ def saves_public():
 
 @app.route("/saves/public/view")
 def saves_public_view():
+    # 1) fname を先に確定
+    fname = request.args.get("fname", "")
+    if not fname:
+        abort(404)
+
+    # 2) メタ参照
     meta = _load_saves_meta()
     m = meta.get(fname, {})
     if m.get("deleted_at"):
@@ -1305,10 +1317,7 @@ def saves_public_view():
     if m.get("visibility") != "public":
         abort(404)
 
-    fname = request.args.get("fname", "")
-    if not fname:
-        abort(404)
-
+    # 3) 本文ファイル存在チェック
     path = os.path.join(SAVES_DIR, fname)
     if not os.path.isfile(path):
         abort(404)
@@ -1316,33 +1325,36 @@ def saves_public_view():
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    # ★ ページ分割
+    # 4) ページ分割
     pages = parse_document(text)
     if not pages:
         abort(404)
 
-    # ★ ページ番号
-    p = max(1, int(request.args.get("p", 1)))
-    p = min(p, len(pages))
+    # 5) ページ番号（不正値対策）
+    try:
+        p = int(request.args.get("p", 1))
+    except (TypeError, ValueError):
+        p = 1
+    p = max(1, min(p, len(pages)))
 
-    page = pages[p - 1]        # ← これが page
+    page = pages[p - 1]
     prev_p = max(1, p - 1)
     next_p = min(len(pages), p + 1)
 
     nums = range(1, len(pages) + 1)
-
     writing_mode = request.args.get("writing_mode", "horizontal")
 
     return render_template(
         "saves_public_view.html",
         fname=fname,
-        page=page,              # ← 必ず渡す
+        page=page,
         p=p,
         prev_p=prev_p,
         next_p=next_p,
         nums=nums,
         writing_mode=writing_mode,
     )
+
 
 @app.context_processor
 def inject_preview_like():
