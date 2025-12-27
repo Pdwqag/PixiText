@@ -1,38 +1,4 @@
 {
-  "チヒロ勘違い.txt": {
-    "owner": "u_1766717973325",
-    "visibility": "private",
-    "pinned": false,
-    "updated_at": 1766760529
-  },
-  "ひながひなひな.txt": {
-    "owner": "u_1766722375733",
-    "visibility": "private",
-    "pinned": false,
-    "updated_at": 1766847774,
-    "deleted_at": 1766847899,
-    "trash_path": "20251227-150459__ひながひなひな.txt"
-  },
-  "どうしてもひなといちゃいちゃしたい.txt": {
-    "owner": "u_1766722375733",
-    "visibility": "public",
-    "pinned": false,
-    "updated_at": 1766767633
-  },
-  "たぶんちひろ.txt": {
-    "owner": "u_1766727934705",
-    "visibility": "public",
-    "pinned": false,
-    "updated_at": 1766793295
-  },
-  "たぶんちひろ_import.txt": {
-    "owner": "u_1766722375733",
-    "visibility": "private",
-    "pinned": false,
-    "updated_at": 1766801344,
-    "imported_from": "たぶんちひろ.txt",
-    "imported_from_owner": "u_1766727934705"
-  },
   "Franz_Kafka.txt": {
     "owner": "u_1766722375733",
     "visibility": "public",
