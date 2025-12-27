@@ -2530,12 +2530,20 @@ select option{
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+
 .explore-saves .save-card{
   padding: 0; /* mg-card側に余計なpaddingが入ってる場合の事故防止 */
+  display:flex;
+  flex-direction:column;
+  min-height: 320px; /* 画像ギャラリーと高さ感を揃える */
 }
 
 .explore-saves .save-card .save-body{
   padding: 18px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  height:100%;
 }
 
 /* ここが崩れの本体：タイトル行はflexで固定 */
@@ -2584,6 +2592,27 @@ select option{
   background: transparent !important;
   border: 1px solid rgba(255,255,255,0.16) !important;
   box-shadow: none !important;
+}
+
+.explore-saves .save-title{
+  font-weight: 800;
+  letter-spacing: .01em;
+  color: #f0f4ff;
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1.05rem;
+}
+
+.explore-saves .save-author{
+  color: rgba(200,210,230,.7);
+  font-size: .9rem;
+}
+
+.explore-saves .save-controls--explore{
+  margin-top: auto;
 }
 
 /* 狭い画面だけ縦積みにする（ここだけは許可） */

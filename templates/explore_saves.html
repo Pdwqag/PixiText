@@ -30,11 +30,10 @@
   <div class="mg-grid mg-grid-lg explore-saves-grid">
     {% for f in files %}
       <div class="mg-card save-card">
-
         <div class="mg-body save-body">
-          <div class="mg-id" title="{{ f.name }}">{{ f.name }}</div>
+          <div class="save-title" title="{{ f.name }}">{{ f.name }}</div>
           {% if f.owner %}
-            <div class="mg-name">by {{ f.owner }}</div>
+            <div class="save-author">by {{ f.owner }}</div>
           {% endif %}
 
           <div class="save-controls--explore">
