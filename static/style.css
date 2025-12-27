@@ -2278,51 +2278,6 @@ select option{
   font-weight:800;
 }
 
-/* Exploreの保存カードを“横長カード”として整形 */
-.explore-saves .saves-list{
-  display:flex;
-  flex-direction:column;
-  gap:14px;
-}
-
-/* 既存 mg-card を活かしつつ、情報+アクションを2カラムに */
-.explore-saves .mg-card{
-  padding:16px 18px;
-}
-
-.explore-saves .mg-body{
-  display:grid;
-  grid-template-columns: 1fr auto;  /* 左:情報 / 右:ボタン */
-  align-items:center;
-  gap:14px;
-}
-
-.explore-saves .mg-id{
-  font-size:18px;
-  font-weight:900;
-  margin:0 0 6px;
-}
-
-.explore-saves .mg-name{
-  opacity:.85;
-}
-
-/* ボタン群を右寄せで並べる */
-.save-controls--explore .save-actions{
-  display:flex;
-  align-items:center;
-  justify-content:flex-end;
-  gap:10px;
-}
-
-/* 主ボタン感を少しだけ出す（読む） */
-.save-controls--explore .save-actions > a.btn{
-  height:40px;
-  border-radius:999px;
-  padding:0 16px;
-  font-weight:900;
-}
-
 /* サブ（追加）は控えめに */
 .save-controls--explore .save-actions form .btn{
   height:40px;
@@ -2530,12 +2485,18 @@ select option{
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+
 .explore-saves .save-card{
   padding: 0; /* mg-card側に余計なpaddingが入ってる場合の事故防止 */
+  display:flex;
+  flex-direction:column;
 }
 
 .explore-saves .save-card .save-body{
   padding: 18px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
 }
 
 /* ここが崩れの本体：タイトル行はflexで固定 */
@@ -2584,6 +2545,27 @@ select option{
   background: transparent !important;
   border: 1px solid rgba(255,255,255,0.16) !important;
   box-shadow: none !important;
+}
+
+.explore-saves .save-title{
+  font-weight: 800;
+  letter-spacing: .01em;
+  color: #f0f4ff;
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1.05rem;
+}
+
+.explore-saves .save-author{
+  color: rgba(200,210,230,.7);
+  font-size: .9rem;
+}
+
+.explore-saves .save-controls--explore{
+  margin-top: auto;
 }
 
 /* 狭い画面だけ縦積みにする（ここだけは許可） */

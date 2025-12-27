@@ -86,6 +86,25 @@ for d in (
     os.makedirs(d, exist_ok=True)
 
 
+def load_cache_version(default: str = "1") -> str:
+    """Read CACHE_VERSION from sw.js so BUILD_VER matches the service worker."""
+
+    sw_path = os.path.join(STATIC_DIR, "sw.js")
+    try:
+        with open(sw_path, encoding="utf-8") as f:
+            for line in f:
+                m = re.search(r"CACHE_VERSION\s*=\s*\"([^\"]+)\"", line)
+                if m:
+                    return m.group(1)
+    except OSError:
+        pass
+
+    return default
+
+
+CACHE_VERSION = load_cache_version("1")
+
+
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 
 
@@ -104,7 +123,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.config.update(
     SECRET_KEY=os.getenv("SECRET_KEY", "change-me"),  # override via env in production
     UPLOAD_FOLDER=UPLOAD_DIR,
-    BUILD_VER=10.3,  # cache buster
+    BUILD_VER=CACHE_VERSION,  # cache buster synced with sw.js
 
     # Flask-Session
     SESSION_TYPE="filesystem",
