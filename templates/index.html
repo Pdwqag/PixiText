@@ -25,7 +25,7 @@
       <button type="button" class="ins" data-insert="[[rb:漢字 > かんじ]]">[[rb]]</button>
       <button type="button" class="ins" data-insert="[pixivimage:]">[pixivimage]</button>
             <!-- プレビュー -->
-      <button type="submit" class="ins-preview" data-ajax-preview title="プレビュー (Ctrl+Enter)">
+      <button type="button" class="ins-preview" data-ajax-preview title="プレビュー (Ctrl+Enter)">
         <img class="ui-icon" src="{{ url_for('static', filename='picture/keyboard.png') }}" alt="" aria-hidden="true">
         プレビュー
       </button>
@@ -163,7 +163,7 @@
 
   // ---- insert buttons ----
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-insert]");
+    const btn = e.target.closest("button.ins[data-insert]");
     if (!btn) return;
 
     const insert = btn.dataset.insert;
@@ -179,51 +179,27 @@
   });
 
   // ---- ajax preview ----
-  document.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-ajax-preview]");
-    if (!btn) return;
+// ---- preview (navigate to /preview) ----
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-ajax-preview]");
+  if (!btn) return;
 
-    e.preventDefault();
-    e.stopPropagation();
+  // 絶対に他のクリック処理やsubmitに飲まれない
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
 
-    const form = btn.closest("form");
-    const ta = form?.querySelector('textarea[name="text"]') || document.getElementById("text");
-    if (!ta) return;
+  const form = btn.closest("form");
+  if (!form) return;
 
-    // 念のため先頭のundefinedだけ除去（過去混入の止血）
+  const ta = form.querySelector("#text");
+  if (ta) {
     ta.value = ta.value.replace(/^undefined\s*/i, "");
+  }
 
-    const writingModeEl = form?.querySelector('[name="writing_mode"]');
-    const writing_mode = writingModeEl?.value || "horizontal";
-    const text = ta.value;
+  form.submit();
+}, true);
 
-    saveDraft();
-
-    try {
-      const r = await fetch("/api/preview_page", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, writing_mode, p: 1 }),
-      });
-
-      const data = await r.json();
-
-      if (!data || data.success !== true) {
-        alert(data?.message ?? "プレビュー生成に失敗しました");
-        return;
-      }
-
-      if (previewBox) {
-        previewBox.innerHTML = data.page_html ?? "";
-      } else {
-        // previewBoxが無いなら遷移にフォールバックでもOK
-        console.warn("previewBox が見つからないため描画できません");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("プレビュー生成に失敗しました");
-    }
-  }, true); // captureで先に取る
 })();
 </script>
 
