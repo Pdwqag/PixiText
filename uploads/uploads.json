@@ -5,7 +5,7 @@
     "original_name_safe": "sample.png",
     "ts": 1766759951,
     "owner": "u_1766722375733",
-    "visibility": "private"
+    "visibility": "public"
   },
   "986354": {
     "stored_name": "sample-1.png",
@@ -31,6 +31,8 @@
     "original_name_safe": "danjin___wuthering_waves__by_zazpr_dghxjri-fullview.jpg",
     "ts": 1766766148,
     "owner": "u_1766722375733",
-    "visibility": "public"
+    "visibility": "private",
+    "deleted_at": 1766847887,
+    "trash_path": "222014__danjin___wuthering_waves__by_zazpr_dghxjri-fullview.jpg"
   }
 }
